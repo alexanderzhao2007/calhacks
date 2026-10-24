@@ -12,7 +12,7 @@ The three current contributors should start **in parallel**. Person 1 is the int
 | Person | Primary track | Ownership | Definition of done |
 |---|---|---|---|
 | **1** | Claude browser integration **and integration lead** | Claude DOM adapter, sent-turn detection, response cover, conversation/turn IDs, safe follow-up insertion/submission, runtime state machine | Hardcoded intervention works end-to-end on Claude without missing/duplicating messages |
-| **2** | Classification and question generation (two-stage) | Test examples and labels, Stage 1 classifier, Stage 2 question generator, the `/classify` and `/question` endpoints, structured JSON, caching/latency measurements, attachment-conservative decisions, the pure follow-up template | Stage 1 reliably distinguishes *visible student reasoning* from likely learning substitution inside the mask deadline; Stage 2 returns one specific question; follow-up text is deterministic and unit-tested |
+| **2** | Classification and question generation (one agent) | Test examples and labels, the single classifier/question agent, the `/classify` endpoint, structured JSON, caching/latency measurements, attachment-conservative decisions, the pure follow-up template | One call reliably distinguishes *visible student reasoning* from likely learning substitution **and** returns one specific question for `intervene`, inside the mask deadline; follow-up text is deterministic and unit-tested |
 | **3** | Sidebar and product UX | React + Shadow Root sidebar, Continue/Skip/Reveal, focus/accessibility, loading/error views, follow-up preview, locally testable mock interface | Polished component accepts typed contracts and emits user actions, with no knowledge of Claude DOM |
 | **4 (when available)** | QA, performance, recovery, demo | Automated E2E checks, streaming/race cases, attachment tests, failure scenarios, latency dashboard, rehearsable demo | Regression suite and live demo pass on chosen Claude web build |
 
@@ -24,49 +24,44 @@ Spend the first short team sync agreeing on:
 
 1. This exact user flow: **send normally → cover new Claude output → classify asynchronously → reveal or sidebar → follow-up after user confirmation**.
 2. Fail-open behavior: `uncertain`, timeout, API error, unsupported attachment and unexpected DOM state **must not trap the student**.
-3. Shared contracts in `shared/contracts.ts` (start from `CLAUDE.md`): `ClassifyRequest`, `ClassifyResponse`, `QuestionRequest`, `QuestionResponse`, `SidebarRequest`, `SidebarResult`.
-   - **Contract change from `CLAUDE.md` §7:** classification and question generation are now **two separate model calls behind two endpoints**. `ClassifyResponse.question` is therefore always `null`; the question arrives from a second `/question` call made only after a `intervene` decision. `CLAUDE.md` §2 ("one model request") and §7 must be updated to match before P1 or P3 implement against it.
+3. Shared contracts in `shared/contracts.ts` (start from `CLAUDE.md`): `ClassifyRequest`, `ClassifyResponse`, `SidebarRequest`, `SidebarResult`. Classification and question generation are **one model call behind one endpoint**, as in `CLAUDE.md` §2 and §7: `ClassifyResponse.question` is nonempty exactly when `decision === 'intervene'` and `null` otherwise.
 4. Who owns the integrator: **Person 1** merges integration PRs and resolves shared behavior; nobody bypasses this agreement to alter page integration.
 5. Definition of done: two contrasting learning examples plus one safe-failure scenario work live on Claude.
-6. **Two deadlines, not one.** The Stage 1 classify deadline (initial target **2 s**) governs the cover. A separate Stage 2 question deadline (initial target **6 s**, to be measured, not assumed) governs the sidebar's loading state. Either deadline expiring **reveals** the original response; a Stage 2 expiry also closes the sidebar rather than leaving an empty prompt box.
-7. **Attachment vision is consent-gated and in-session only.** See §3.3. Nothing is sent to the vision model without explicit opt-in, and anything the extension could not capture at upload time stays `uncertain`.
+6. **One deadline.** A single classify deadline (initial target **2 s**, configurable and to be measured, not assumed) governs the cover. Because the same call produces the question, the sidebar opens already populated and has no loading state to time out. The deadline expiring **reveals** the original response.
+7. **Attachment vision is consent-gated and in-session only.** See §3.2. Nothing is sent to the vision model without explicit opt-in, and anything the extension could not capture at upload time stays `uncertain`.
 
 Record any contract changes in the shared types **before** a consuming team member changes implementation.
 
 ## 3. Interfaces between tracks
 
-Person 2 owns **two sequential model calls behind two endpoints**. Only the first one sits inside the response-mask deadline.
+Person 2 owns **one model call behind one endpoint**, and it sits inside the response-mask deadline.
 
 ```text
 P1 detects sent turn ──► cover response
                        │
                        ▼
-        Stage 1  POST /classify        (fast model, ≤ 2 s budget)
+             POST /classify            (one call, ≤ 2 s budget)
           text prompt + attachment metadata
           + consented attachment images
                        │
       allow / uncertain / timeout / error ──► reveal, DONE
                        │
-                   intervene
+         intervene + one question
                        │
                        ▼
-            open sidebar in LOADING state (cover stays)
-                       │
-                       ▼
-        Stage 2  POST /question        (Claude, ≤ 6 s budget)
-          one train-of-thought question
-                       │
-         timeout / error ──► close sidebar, reveal, DONE
+        open sidebar with the question (cover stays)
                        │
                        ▼
               student types reasoning ──► formatFollowUp() ──► P1 submits
 ```
 
-### 3.1 Stage 1 — classification (`POST /classify`)
+### 3.1 Classification and question (`POST /classify`)
 
-**Model:** a fast, cheap external model. *Target: a Gemini Flash Lite-class model; the exact model ID is **TBD by Person 2** and must not be depended on by core logic.* The provider is swappable behind this endpoint: P1 and P3 see only the JSON below.
+**Model:** one model, fast enough to decide **and** write a question inside the 2 s cover budget. *The exact model ID is **TBD by Person 2** and must not be depended on by core logic.* The provider is swappable behind this endpoint: P1 and P3 see only the JSON below.
 
-**Job:** decide `allow` / `intervene` / `uncertain` per the rubric in `CLAUDE.md` §5. Nothing else — it never writes a question.
+**Job:** decide `allow` / `intervene` / `uncertain` per the rubric in `CLAUDE.md` §5, and — only for `intervene` — return exactly one short, task-specific train-of-thought question that elicits the student's own first move: base cases, chosen method and why, proposed thesis, expected failure mode. The question must not contain the answer, a worked step, or a multiple-choice menu of methods. For `allow` and `uncertain`, `question` is `null`.
+
+Keep the decision rubric and the question rubric as separate, clearly labelled parts of the one prompt, and have the model emit the decision field before the question field so the question is written in light of a committed decision.
 
 Person 1 → Person 2:
 
@@ -87,52 +82,22 @@ Person 2 → Person 1:
   "requestId": "per-turn-id",
   "decision": "intervene",
   "reason": "Requests a full solution without visible effort",
-  "question": null
+  "question": "Which integration technique looks most promising here, and what in the integrand points you to it?"
 }
 ```
 
-`question` is **always `null`** on this endpoint; it exists only so the field stays shape-compatible with `CLAUDE.md` §7 during the transition. Person 1 owns the final deterministic behavior: reveal or open the sidebar, based on the validated result and state.
+Validation is part of the contract: an `intervene` with a missing or empty question is an **invalid response**, and Person 1 treats it as a failure and reveals. On any model or server failure, Person 2 returns a non-2xx response rather than a vague or generic question. A generic fallback question ("What do you think?") is **worse than revealing the answer** — it trains students to dismiss the sidebar. Person 1 owns the final deterministic behavior: reveal or open the sidebar, based on the validated result and state, and fails open.
 
-### 3.2 Stage 2 — train-of-thought question (`POST /question`)
+### 3.2 Attachment vision (consent-gated, in-session only)
 
-**Model:** Claude, via the Claude API with server-side credentials. Called by the background worker **only** after a validated `intervene`.
-
-**Job:** produce exactly one short, task-specific question that elicits the student's own first move — base cases, chosen method and why, proposed thesis, expected failure mode. It must not contain the answer, a worked step, or a multiple-choice menu of methods.
-
-Person 1 → Person 2:
-
-```json
-{
-  "requestId": "per-turn-id",
-  "prompt": "Write the recursive Fibonacci function for my homework",
-  "classifierReason": "Requests a full solution without visible effort",
-  "attachments": [],
-  "attachmentContentsAvailable": false,
-  "attachmentContents": []
-}
-```
-
-Person 2 → Person 1:
-
-```json
-{
-  "requestId": "per-turn-id",
-  "question": "Before seeing code, what are the base cases, and how does each call reduce the problem?"
-}
-```
-
-On any failure, Person 2 returns a non-2xx response rather than a vague or generic question. A generic fallback question ("What do you think?") is **worse than revealing the answer** — it trains students to dismiss the sidebar. Person 1 fails open.
-
-### 3.3 Attachment vision (consent-gated, in-session only)
-
-Stage 1 may read attachment **images** through a vision-capable model, under these constraints, agreed as a unit:
+The classifier may read attachment **images** through a vision-capable model, under these constraints, agreed as a unit:
 
 - **Explicit opt-in.** Off by default. Until the student opts in, `attachmentContents` is always `[]` and behavior is identical to the text-only classifier. The consent copy must name that attachment images are sent to a third-party model.
 - **In-session capture only (P1).** Attachments on `claude.ai` live on Anthropic's servers; the extension cannot fetch them back. P1 captures bytes at **upload time** in the live tab (file input / drag / paste). A conversation that was reloaded, or an attachment uploaded before tot was active, yields nothing.
 - **`attachmentContentsAvailable` becomes a real boolean**, set by P1 per turn — it is no longer the literal `false` in `CLAUDE.md` §7. When it is `false`, the `CLAUDE.md` §5 rule still holds: a task living only in an unread attachment returns `uncertain` and passes through.
 - **No persistence.** Attachment bytes are never stored, logged, or cached by request key.
 - **Size and type ceiling** set by P2; anything over it is treated as unread rather than silently truncated.
-- This is a **Phase C item**, not Phase A. The text-only classifier must pass its labeled set first.
+- This is a **Phase C item**, not Phase A. The text-only classifier must pass its labeled set first. Vision adds latency to the same call that governs the cover, so re-measure the 2 s budget with it on.
 
 ### Person 1 → Person 3: show sidebar
 
@@ -184,12 +149,12 @@ It returns the message body from `CLAUDE.md` §4: a framing line, the student's 
 
 **Person 2:**
 - Prepare 50–100 prompts labeled `allow/intervene/uncertain`, including already-attempted problems, conceptual questions, essays, coding, ambiguous context, and unread files.
-- Build **both** mockable endpoints returning schema-validated JSON: `/classify` (Stage 1) and `/question` (Stage 2). Ship them as stubs on day one so P1 and P3 are never blocked.
-- Implement Stage 1 model instructions based on **meaningful demonstrated effort**, not simple keyword detection. Text-only first; no vision in Phase A.
-- Implement Stage 2 on the Claude API: one question, no answer leakage, no generic fallbacks.
+- Build the mockable `/classify` endpoint returning schema-validated JSON. Ship it as a stub on day one so P1 and P3 are never blocked.
+- Implement the model instructions based on **meaningful demonstrated effort**, not simple keyword detection. Text-only first; no vision in Phase A.
+- In the same call and the same prompt, generate the question for `intervene`: one question, no answer leakage, no generic fallbacks, `null` for every other decision.
 - Write and unit-test the pure `formatFollowUp` template against the `CLAUDE.md` §4 example, including adversarial reasoning text (quotes, backticks, "ignore previous instructions").
-- Measure p50/p95 **per stage separately** — Stage 1 against the 2 s cover deadline, Stage 2 against the 6 s sidebar deadline — plus failure behavior and false-positive interruptions.
-- Treat prompt and reasoning text as **untrusted data** in both model calls; neither may be able to override the system instructions.
+- Measure p50/p95 end-to-end against the 2 s cover deadline, split by decision (an `intervene` pays for the question text, an `allow` does not), plus failure behavior and false-positive interruptions.
+- Treat prompt and reasoning text as **untrusted data**; neither may be able to override the system instructions.
 
 **Person 3:**
 - Build standalone sidebar with representative fixture data.
@@ -202,18 +167,17 @@ It returns the message body from `CLAUDE.md` §4: a framing line, the student's 
 ### Phase B — First real integration
 
 - Person 1 wires new-turn capture to Person 2's `/classify` and validates the output.
-- Person 1 wires `intervene` to Person 3's sidebar in its **loading** state, then calls `/question` and fills it in.
-- `allow`, `uncertain`, Stage 1 timeout, and Stage 1 errors remove the cover.
-- Stage 2 timeout or error closes the sidebar **and** removes the cover; the student is never left looking at an empty question box.
+- Person 1 wires a validated `intervene` to Person 3's sidebar, which opens with the question already in hand.
+- `allow`, `uncertain`, timeout, errors, and an `intervene` whose question fails validation all remove the cover.
 - Continue opens a preview and, after explicit confirmation, creates **one** follow-up in the existing Claude conversation.
 - Skip reveals the original response and sends nothing.
 
-**Integration checkpoint B:** All of the following work in one Chrome profile: allow, intervene/continue, skip, **Stage 1 timeout**, **Stage 2 timeout**, and navigation away mid-request at either stage.
+**Integration checkpoint B:** All of the following work in one Chrome profile: allow, intervene/continue, skip, **classify timeout**, **invalid or missing question on an `intervene`**, and navigation away mid-request.
 
 ### Phase C — Reliability and hackathon delivery
 
 - Test multiple tabs, rapid requests, streamed output, edited drafts, navigation, UI changes, attachment indicators, and repeated classifier responses.
-- Only now: add consented attachment vision to Stage 1 per §3.3, with the opt-in flow and the in-session upload capture. Verify that revoking consent returns the classifier to text-only behavior.
+- Only now: add consented attachment vision per §3.2, with the opt-in flow and the in-session upload capture. Verify that revoking consent returns the classifier to text-only behavior.
 - Fix response-to-turn association and self-triggering on the tot-generated follow-up.
 - Confirm no stuck covers and no overwritten existing drafts.
 - Measure and record actual latency and response exposure, not assumed numbers.
@@ -249,8 +213,7 @@ tot/
 │   ├── core/followUpComposer.ts    # Person 1 — calls P2's formatFollowUp, owns submission
 │   └── ui/TotSidebar.tsx           # Person 3
 ├── api/
-│   ├── classify.ts                  # Person 2 — Stage 1, external fast model
-│   └── question.ts                  # Person 2 — Stage 2, Claude API
+│   └── classify.ts                  # Person 2 — one call: decision + question
 ├── shared/formatFollowUp.ts         # Person 2 — pure function, no DOM, no model call
 ├── tests/classifier/              # Person 2 initially; Person 4 assists
 └── tests/e2e/                     # Person 1 initially; Person 4 owns later
@@ -266,10 +229,10 @@ Avoid parallel edits to the same adapter or coordinator files. Merge work in sma
 | First tokens shown before cover | P1 / P4 | Attach cover on send event without blocking submission; verify real streaming behavior; document limits |
 | Follow-up duplicates, wrong conversation, or overwrites draft | P1 / P4 | Turn IDs, idempotent state machine, detect occupied composer, submission confirmation |
 | Classifier interrupts prompts already showing effort | P2 | Labeled regression prompts, conservative `uncertain`, explicit rubric |
-| API slowness leaves response hidden | P2 / P1 | 2 s maximum Stage 1 mask, fail open; collect p95 |
-| Two-stage pipeline doubles the latency budget | P2 | Stage 2 runs **after** the decision, outside the cover deadline; only `intervene` pays for it; separate 6 s sidebar deadline, also fail-open |
-| Stage 2 question is generic, leading, or leaks the answer | P2 | Rubric for question quality, labeled review of generated questions, non-2xx instead of a fallback question |
-| Credentials for two providers | P2 | Both keys server-side only; neither provider SDK ships in the extension bundle |
+| API slowness leaves response hidden | P2 / P1 | 2 s maximum mask, fail open; collect p95 |
+| Writing the question inside the cover deadline makes the one call too slow | P2 | Pick a fast model, cap question length, keep the output schema minimal; measure p95 for `intervene` specifically; raise the deadline only on measured evidence, never silently |
+| Question is generic, leading, or leaks the answer | P2 | Rubric for question quality in the same prompt, labeled review of generated questions, non-2xx or an invalid-response reveal instead of a fallback question |
+| Provider credentials | P2 | Keys server-side only; no provider SDK ships in the extension bundle |
 | Student cannot dismiss sidebar or recover response | P3 / P4 | Permanent Skip/Reveal affordance, keyboard and failure tests |
 | Uploaded files assumed readable | P1 / P2 | In-session upload capture only; honest `attachmentContentsAvailable` flag; `uncertain` pass-through whenever contents are absent |
 | Coursework images sent to a third-party model | P2 / P3 | Explicit opt-in naming the provider, off by default, no persistence of bytes, Phase C only |
@@ -292,9 +255,9 @@ Do not spend hackathon MVP time on:
 - ChatGPT/Gemini support or generic adapter abstraction beyond clean Claude-specific boundaries.
 - Friends, leaderboards, group challenges, accounts, or cloud user profiles.
 - Learning/productivity modes, activity dashboards, or usage-scoring systems.
-- Parsing arbitrary uploaded files or screenshots **beyond** the consented in-session attachment vision in §3.3. No OCR pipelines, no server-side file fetching, no retroactive reading of attachments from reloaded conversations.
+- Parsing arbitrary uploaded files or screenshots **beyond** the consented in-session attachment vision in §3.2. No OCR pipelines, no server-side file fetching, no retroactive reading of attachments from reloaded conversations.
 - Editing and regenerating original Claude user messages.
-- Autonomous agents, persistent personalized tutors, or a third model call. The pipeline is exactly **two** model calls — one classify, one question — plus a deterministic non-model formatter. No model rewrites the student's reasoning.
+- Autonomous agents, persistent personalized tutors, or a second model call. The pipeline is exactly **one** model call — decision plus question — followed by a deterministic non-model formatter. No model rewrites the student's reasoning.
 - Perfect protection against all answer exposure without having experimentally proved it is possible.
 
 ## 10. Demo checklist and ship criteria
@@ -307,12 +270,12 @@ Expected: classify `allow`; tot uncovers Claude normally.
 **Demo 2 — No attempt, intervention**
 > `Write the recursive Fibonacci function for my homework.`
 
-Expected: Stage 1 classifies `intervene`; sidebar opens in loading state; Stage 2 returns a base-cases/recursion question; student types reasoning; `formatFollowUp` preview appears with their words quoted verbatim; one confirmed follow-up is sent; Claude responds to that reasoning.
+Expected: the one call classifies `intervene` and returns a base-cases/recursion question; the sidebar opens with that question already in it; student types reasoning; `formatFollowUp` preview appears with their words quoted verbatim; one confirmed follow-up is sent; Claude responds to that reasoning.
 
 **Demo 3 — Fail-open**
-> Submit a prompt with a simulated slow or failed Stage 1, then repeat with a simulated slow or failed Stage 2.
+> Submit a prompt with a simulated slow or failed `/classify`, then repeat with an `intervene` whose question is missing or empty.
 
-Expected: Stage 1 failure — cover disappears at deadline, sidebar never opens. Stage 2 failure — the loading sidebar closes itself and the cover lifts. In both cases the original Claude response is accessible, with no stranded overlay, empty question box, or lost message.
+Expected: in both cases the cover disappears at the deadline or on validation failure, the sidebar never opens, and the original Claude response is accessible, with no stranded overlay, empty question box, or lost message.
 
 **Ship only if** these work reliably. Then add cosmetic polish; do not trade message safety for more features.
 

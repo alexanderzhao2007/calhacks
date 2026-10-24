@@ -32,6 +32,31 @@ export function getComposer(): HTMLElement | null {
   return document.querySelector<HTMLElement>(SEL.composer);
 }
 
+const COMPOSER_LOCK_ATTR = 'data-tot-composer-lock';
+
+/**
+ * claude.ai pulls focus into its composer when it thinks the user is typing
+ * with nothing focused. Our panel lives in a shadow root, so `event.target`
+ * retargets to the shadow host and that check misreads it as "not an input".
+ * `isolateEvents` on the UI stops the event reaching a bubble-phase listener;
+ * this makes a capture-phase one harmless too, since `.focus()` on an inert
+ * element does nothing. Always paired with `unlockComposerFocus`.
+ */
+export function lockComposerFocus(): void {
+  const composer = getComposer();
+  if (!composer || composer.hasAttribute(COMPOSER_LOCK_ATTR)) return;
+  composer.setAttribute(COMPOSER_LOCK_ATTR, '');
+  composer.setAttribute('inert', '');
+}
+
+/** Undo every lock we set, including on a composer node React has swapped. */
+export function unlockComposerFocus(): void {
+  for (const el of document.querySelectorAll(`[${COMPOSER_LOCK_ATTR}]`)) {
+    el.removeAttribute('inert');
+    el.removeAttribute(COMPOSER_LOCK_ATTR);
+  }
+}
+
 export function isComposerEmpty(composer: HTMLElement): boolean {
   const flag = composer.getAttribute('data-doc-empty');
   if (flag !== null) return flag === 'true';

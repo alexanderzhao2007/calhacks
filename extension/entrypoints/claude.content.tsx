@@ -15,6 +15,8 @@ import {
   insertComposerText,
   isComposerEmpty,
   isSendButtonTarget,
+  lockComposerFocus,
+  unlockComposerFocus,
 } from '../adapters/claudeAdapter';
 import {
   hold,
@@ -65,10 +67,32 @@ export default defineContentScript({
       position: 'inline',
       anchor: 'body',
       append: 'last',
+      // Keep typing in the panel from reaching claude.ai's document listeners.
+      isolateEvents: ['keydown', 'keyup', 'keypress', 'beforeinput', 'input', 'paste'],
       onMount: (container) => ReactDOM.createRoot(container),
       onRemove: (root) => root?.unmount(),
     });
     ui.mount();
+
+    // While focus is in the panel, Claude's composer can't take it. With an open
+    // shadow root, document.activeElement is the host whenever focus is inside.
+    ctx.addEventListener(ui.shadowHost, 'focusin', () => lockComposerFocus());
+    ctx.addEventListener(ui.shadowHost, 'focusout', () => {
+      // focusout fires before focus lands; check once it has.
+      setTimeout(() => {
+        if (document.activeElement !== ui.shadowHost) unlockComposerFocus();
+      }, 0);
+    });
+    // Any click outside the panel hands the composer back, so the user is never
+    // stuck unable to type into Claude.
+    ctx.addEventListener(
+      document,
+      'pointerdown',
+      (e) => {
+        if (e.target !== ui.shadowHost) unlockComposerFocus();
+      },
+      { capture: true },
+    );
     const render = () =>
       ui.mounted?.render(
         <TotPanel
@@ -97,7 +121,10 @@ export default defineContentScript({
             openSidebar(fx.request);
             break;
           case 'closeSidebar':
-            if (panel.request?.turnId === fx.turnId) setPanel({ request: null });
+            if (panel.request?.turnId === fx.turnId) {
+              unlockComposerFocus();
+              setPanel({ request: null });
+            }
             break;
           case 'submitFollowUp':
             void submitFollowUp(fx.turnId, fx.studentReasoning);
@@ -141,6 +168,7 @@ export default defineContentScript({
       deadlines.clear();
       awaitingNode.length = 0;
       releaseAll();
+      unlockComposerFocus();
       for (const el of getAssistantMessages()) markSeen(el);
       setPending(false);
       setPanel({ request: null, notice: null, copyText: null, heldTurnIds: [] });
@@ -292,6 +320,7 @@ export default defineContentScript({
 
     async function submitFollowUp(turnId: string, studentReasoning: string) {
       const text = formatFollowUp(studentReasoning);
+      unlockComposerFocus(); // we're about to focus and type into it ourselves
       const composer = getComposer();
       if (!composer) {
         setPanel({ notice: "tot couldn't find Claude's message box. Copy your follow-up and paste it.", copyText: text });
@@ -335,6 +364,7 @@ export default defineContentScript({
 
     ctx.onInvalidated(() => {
       observer.disconnect();
+      unlockComposerFocus();
       revealEverything('extension invalidated');
       uninstallCoverStyle();
     });
