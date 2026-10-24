@@ -1,0 +1,13 @@
+{
+  "name": "tot",
+  "private": true,
+  "workspaces": [
+    "extension"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w extension",
+    "build": "npm run build -w extension",
+    "compile": "npm run compile -w extension",
+    "test": "npm run test -w extension"
+  }
+}
