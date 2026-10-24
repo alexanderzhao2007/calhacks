@@ -1,0 +1,1 @@
+create a user flag system, either talking to voice agents or typing
