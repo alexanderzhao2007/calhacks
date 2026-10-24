@@ -32,7 +32,7 @@ import { formatFollowUp } from '../core/followUpText';
 import { TurnCoordinator, chatIdFromPath, type Effect } from '../core/turnCoordinator';
 import { TotPanel, type PanelProps } from '../ui/PlaceholderSidebar';
 
-const DEADLINE_MS = 2000;
+const DEADLINE_MS = 10000;
 const SEND_BUTTON_WAIT_MS = 60_000; // the held answer may still be streaming
 const FOLLOWUP_CONFIRM_MS = 10_000;
 const USER_CHECKED_ATTR = 'data-tot-checked';

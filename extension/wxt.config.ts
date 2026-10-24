@@ -11,8 +11,9 @@ export default defineConfig({
     name: 'tot',
     description:
       'Train of thought: a quick nudge to try your own reasoning before reading the AI answer.',
-    // Keep permissions minimal (CLAUDE.md §9). Add the classifier origin here once it exists.
+    // Keep permissions minimal (CLAUDE.md §9): claude.ai plus the classifier
+    // origin. Swap the localhost entry for the deployed API origin later.
     permissions: ['storage'],
-    host_permissions: ['https://claude.ai/*'],
+    host_permissions: ['https://claude.ai/*', 'http://localhost:8787/*'],
   },
 });

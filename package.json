@@ -2,12 +2,15 @@
   "name": "tot",
   "private": true,
   "workspaces": [
-    "extension"
+    "extension",
+    "api"
   ],
   "scripts": {
     "dev": "npm run dev -w extension",
     "build": "npm run build -w extension",
     "compile": "npm run compile -w extension",
-    "test": "npm run test -w extension"
+    "test": "npm run test -w extension",
+    "dev:api": "npm run dev -w api",
+    "test:api": "npm run test -w api"
   }
 }
