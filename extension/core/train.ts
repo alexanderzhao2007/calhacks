@@ -40,33 +40,42 @@ export function milesAt(s: number, goal: number): number {
   return Math.round(Math.max(0, Math.min(goal, progress * goal)));
 }
 
-const deg = (r: number) => (r * 180) / Math.PI;
+/** The train drawing is 52 wide; its nose is at x=52. */
+const TRAIN_W = 52;
+/** Horizontal room the train may use (the card's padding included), so it never hangs off. */
+const MIN_X = -8;
+const MAX_X = 296;
 
 /**
- * SVG transform that puts the 52×20 train drawing with its nose at distance
- * `s`. It tilts on the curves and faces left on the middle row, mirrored rather
- * than rotated so it is never upside down.
+ * SVG transform that puts the train with its nose at distance `s`. The train
+ * always stays level and faces the way it is heading: right along the top row
+ * and down the right-hand curve, left along the middle row and down the
+ * left-hand curve, right again on the bottom row. Facing the way it came
+ * through each curve keeps its body over the track; right after it turns
+ * around at the start of a row, it is nudged along so it never hangs past the
+ * card's edge.
  */
 export function trainTransform(s: number): string {
   let x: number;
   let y: number;
-  let angle: number;
+  let right: boolean;
   if (s <= L1) {
-    [x, y, angle] = [16 + s, 20, 0];
+    [x, y, right] = [16 + s, 20, true];
   } else if (s <= L1 + ARC) {
-    const a = -Math.PI / 2 + (s - L1) / R;
-    [x, y, angle] = [258 + R * Math.cos(a), 45 + R * Math.sin(a), deg(a) + 90];
+    const t = (s - L1) / R; // 0..π, clockwise down the right-hand curve
+    [x, y, right] = [258 + R * Math.sin(t), 45 - R * Math.cos(t), true];
   } else if (s <= L1 + ARC + L2) {
-    [x, y, angle] = [258 - (s - L1 - ARC), 70, 180];
+    [x, y, right] = [258 - (s - L1 - ARC), 70, false];
   } else if (s <= L1 + 2 * ARC + L2) {
-    const b = 1.5 * Math.PI - (s - L1 - ARC - L2) / R;
-    [x, y, angle] = [30 + R * Math.cos(b), 95 + R * Math.sin(b), deg(b) - 90];
+    const t = (s - L1 - ARC - L2) / R; // 0..π, counterclockwise down the left-hand curve
+    [x, y, right] = [30 - R * Math.sin(t), 95 - R * Math.cos(t), false];
   } else {
-    [x, y, angle] = [30 + (s - (L1 + 2 * ARC + L2)), 120, 0];
+    [x, y, right] = [30 + (s - (L1 + 2 * ARC + L2)), 120, true];
   }
+  x = right ? Math.max(x, MIN_X + TRAIN_W) : Math.min(x, MAX_X - TRAIN_W);
   const at = `translate(${x.toFixed(2)},${y.toFixed(2)}) `;
-  if (angle <= 90) return `${at}rotate(${angle.toFixed(2)}) translate(-52,-20)`;
-  return `${at}scale(-1,1) rotate(${(180 - angle).toFixed(2)}) translate(-52,-20)`;
+  // Mirrored (not rotated) to face left, so the nose stays at the anchor point.
+  return right ? `${at}translate(-52,-20)` : `${at}scale(-1,1) translate(-52,-20)`;
 }
 
 /** "Kim Park" → KP; one word → its first two letters. */

@@ -31,11 +31,32 @@ describe('trackPos / milesAt', () => {
 
 describe('trainTransform', () => {
   it('faces right on the top row and at the station', () => {
-    expect(trainTransform(100)).toBe('translate(116.00,20.00) rotate(0.00) translate(-52,-20)');
-    expect(trainTransform(TRACK_LENGTH)).toBe('translate(228.00,120.00) rotate(0.00) translate(-52,-20)');
+    expect(trainTransform(100)).toBe('translate(116.00,20.00) translate(-52,-20)');
+    expect(trainTransform(TRACK_LENGTH)).toBe('translate(228.00,120.00) translate(-52,-20)');
   });
-  it('mirrors (never flips upside down) on the middle row', () => {
-    expect(trainTransform(STOPS[0] + 100)).toContain('scale(-1,1) rotate(0.00)');
+  it('faces left on the middle row', () => {
+    expect(trainTransform(STOPS[0] + 100)).toMatch(/scale\(-1,1\) translate\(-52,-20\)$/);
+  });
+  it('never rotates; faces the way it came through each curve', () => {
+    for (let s = TRACK_START; s <= TRACK_LENGTH; s += 3) expect(trainTransform(s)).not.toContain('rotate');
+    const mirrored = (s: number) => trainTransform(s).includes('scale(-1,1)');
+    expect(mirrored(STOPS[0])).toBe(false); // right-hand curve: still facing right
+    expect(mirrored(STOPS[0] + 60)).toBe(true); // middle row
+    expect(mirrored(STOPS[1])).toBe(true); // left-hand curve: still facing left
+    expect(mirrored(STOPS[1] + 60)).toBe(false); // bottom row
+  });
+  it('follows the curves', () => {
+    expect(trainTransform(STOPS[0])).toMatch(/^translate\(283\.00,45\.00\)/);
+    expect(trainTransform(STOPS[1])).toMatch(/^translate\(5\.00,95\.00\)/);
+  });
+  it('never hangs past the card edge', () => {
+    for (let s = TRACK_START; s <= TRACK_LENGTH; s += 1) {
+      const t = trainTransform(s);
+      const x = Number(t.match(/^translate\(([-\d.]+),/)![1]);
+      const [left, right] = t.includes('scale(-1,1)') ? [x, x + 52] : [x - 52, x];
+      expect(left).toBeGreaterThanOrEqual(-8);
+      expect(right).toBeLessThanOrEqual(296);
+    }
   });
 });
 
