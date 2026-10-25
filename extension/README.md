@@ -21,3 +21,7 @@ Switch to a mock classifier (background worker console or any extension page):
 ```js
 chrome.storage.local.set({ mockMode: 'slow' }) // 'live' (default) | 'fast' | 'slow' | 'error'
 ```
+
+## Turning tot on
+
+After install, tot opens a welcome page (`entrypoints/welcome`). Its **Turn on tot** button is the one-time consent to send Claude messages to the classifier (`core/consent.ts`, storage key `totEnabled`). Until then the content script lets every send through untouched: no cover, no classifier call, nothing counted. Reloading the unpacked extension keeps the setting; a fresh profile asks again. The toolbar popup shows a "Turn it on" link while tot is off.

@@ -13,6 +13,7 @@ import type {
 } from '@shared/contracts';
 import { callReducer } from '../core/friendsApi';
 import { localDay, TOKEN_KEY, type Tier } from '../core/social';
+import { openWelcome } from '../core/consent';
 
 export type MockMode = 'live' | 'fast' | 'slow' | 'error';
 
@@ -142,6 +143,11 @@ async function mockResult(mode: Exclude<MockMode, 'live'>, make: () => unknown):
 }
 
 export default defineBackground(() => {
+  // The welcome page asks for the one-time OK to check Claude messages.
+  browser.runtime.onInstalled.addListener(({ reason }) => {
+    if (reason === 'install') openWelcome();
+  });
+
   void updateJoinBadge();
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && TOKEN_KEY in changes) void updateJoinBadge();

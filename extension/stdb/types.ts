@@ -32,6 +32,9 @@ export const GroupDay = __t.object("GroupDay", {
 });
 export type GroupDay = __Infer<typeof GroupDay>;
 
+export const GroupLooks = __t.object("GroupLooks", {});
+export type GroupLooks = __Infer<typeof GroupLooks>;
+
 export const GroupMember = __t.object("GroupMember", {
   identity: __t.identity(),
   groupId: __t.u64(),
@@ -41,20 +44,55 @@ export type GroupMember = __Infer<typeof GroupMember>;
 export const GroupMembers = __t.object("GroupMembers", {});
 export type GroupMembers = __Infer<typeof GroupMembers>;
 
+export const Look = __t.object("Look", {
+  identity: __t.identity(),
+  firstName: __t.string(),
+  lastName: __t.string(),
+  color: __t.string(),
+});
+export type Look = __Infer<typeof Look>;
+
+export const MemberLook = __t.object("MemberLook", {
+  identity: __t.identity(),
+  firstName: __t.string(),
+  lastName: __t.string(),
+  color: __t.string(),
+  joinedMicros: __t.u64(),
+});
+export type MemberLook = __Infer<typeof MemberLook>;
+
+export const MemberSince = __t.object("MemberSince", {
+  identity: __t.identity(),
+  joinedAt: __t.timestamp(),
+});
+export type MemberSince = __Infer<typeof MemberSince>;
+
 export const MyCounts = __t.object("MyCounts", {});
 export type MyCounts = __Infer<typeof MyCounts>;
 
 export const MyGroup = __t.object("MyGroup", {});
 export type MyGroup = __Infer<typeof MyGroup>;
 
+export const MyLook = __t.object("MyLook", {});
+export type MyLook = __Infer<typeof MyLook>;
+
 export const MyProfile = __t.object("MyProfile", {});
 export type MyProfile = __Infer<typeof MyProfile>;
+
+export const MySolo = __t.object("MySolo", {});
+export type MySolo = __Infer<typeof MySolo>;
 
 export const Profile = __t.object("Profile", {
   identity: __t.identity(),
   name: __t.string(),
 });
 export type Profile = __Infer<typeof Profile>;
+
+export const SoloGoal = __t.object("SoloGoal", {
+  identity: __t.identity(),
+  weeklyGoal: __t.u32(),
+});
+export type SoloGoal = __Infer<typeof SoloGoal>;
 
 export const TrainGroup = __t.object("TrainGroup", {
   id: __t.u64(),

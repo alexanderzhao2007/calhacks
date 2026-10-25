@@ -43,15 +43,20 @@ import RecordQuestionReducer from "./record_question_reducer";
 import RecordThoughtFirstReducer from "./record_thought_first_reducer";
 import SetGoalReducer from "./set_goal_reducer";
 import SetNameReducer from "./set_name_reducer";
+import SetProfileReducer from "./set_profile_reducer";
+import SetSoloGoalReducer from "./set_solo_goal_reducer";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
 import GroupCountsRow from "./group_counts_table";
+import GroupLooksRow from "./group_looks_table";
 import GroupMembersRow from "./group_members_table";
 import MyCountsRow from "./my_counts_table";
 import MyGroupRow from "./my_group_table";
+import MyLookRow from "./my_look_table";
 import MyProfileRow from "./my_profile_table";
+import MySoloRow from "./my_solo_table";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -64,6 +69,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, GroupCountsRow),
+  groupLooks: __table({
+    name: 'group_looks',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, GroupLooksRow),
   groupMembers: __table({
     name: 'group_members',
     indexes: [
@@ -85,6 +97,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyGroupRow),
+  myLook: __table({
+    name: 'my_look',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyLookRow),
   myProfile: __table({
     name: 'my_profile',
     indexes: [
@@ -92,6 +111,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyProfileRow),
+  mySolo: __table({
+    name: 'my_solo',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MySoloRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -105,6 +131,8 @@ const reducersSchema = __reducers(
   __reducerSchema("record_thought_first", RecordThoughtFirstReducer),
   __reducerSchema("set_goal", SetGoalReducer),
   __reducerSchema("set_name", SetNameReducer),
+  __reducerSchema("set_profile", SetProfileReducer),
+  __reducerSchema("set_solo_goal", SetSoloGoalReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

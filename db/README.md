@@ -8,11 +8,26 @@ Opt-in social layer: each group shares one train. Answering tot's question inste
 
 | View | Returns |
 |---|---|
-| `my_profile` | your name |
+| `my_profile` | your display name ("Maya R.") |
+| `my_look` | your character: first and last name, bulb color |
+| `my_solo` | your weekly goal when riding solo |
 | `my_counts` | your days: prompts, questions, answers, miles |
 | `my_group` | your group (one group per person, max 8 members) |
 | `group_members` | names of everyone in your group |
+| `group_looks` | everyone's character and join time (bulbs show in join order; hat ties go to the earlier joiner) |
 | `group_counts` | your group's **answers and miles** per day. Prompt and question counts are never shared |
+
+## Popup flow (from the "tot popup" design)
+
+Home → **About you** (`set_profile`: first/last name and one of 8 bulb colors; this is the opt-in, and the token is saved only after it succeeds) → one of:
+
+- **Start your train** (`create_group`, goals 50/100/200/other) → Invite (group code) → train
+- **Climb aboard** (`join_group` with a 6-character code) → train
+- **Solo** (`set_solo_goal`, goals 30/50/100/other) → solo train; "Bring friends aboard" starts a group later
+
+The train view, menu (code, edit character, change goal, leave group, delete data) and the once-a-week arrival animation are all client-side (`extension/ui/TrainPopup.tsx`). Which arrivals were already shown is kept in `chrome.storage.local` (`totArrivalsSeen`).
+
+The `look`, `member_since` and `solo_goal` tables were added after the first Maincloud publish. Adding tables is an automatic migration, so publishing this version keeps all existing data (no `--delete-data`). People who joined before it show initials from their display name and the default teal color until they edit their character.
 
 ## What gets counted
 

@@ -61,12 +61,47 @@ const dailyCount = table(
   },
 );
 
-const spacetimedb = schema({ profile, trainGroup, groupMember, dailyCount });
+// The popup's "character": first/last name and bulb color. Separate from
+// profile so adding it was a non-breaking migration; profile.name stays the
+// display name ("Maya R.") everything else uses.
+const look = table(
+  { name: 'look' },
+  {
+    identity: t.identity().primaryKey(),
+    firstName: t.string(),
+    lastName: t.string(),
+    color: t.string(),
+  },
+);
+
+// When each person boarded their current group: bulbs are shown in join order,
+// and ties for the hat go to the earlier joiner.
+const memberSince = table(
+  { name: 'member_since' },
+  {
+    identity: t.identity().primaryKey(),
+    joinedAt: t.timestamp(),
+  },
+);
+
+// Weekly goal for someone riding solo (no group).
+const soloGoal = table(
+  { name: 'solo_goal' },
+  {
+    identity: t.identity().primaryKey(),
+    weeklyGoal: t.u32(),
+  },
+);
+
+const spacetimedb = schema({ profile, trainGroup, groupMember, dailyCount, look, memberSince, soloGoal });
 export default spacetimedb;
 
 type Ctx = ReducerCtx<InferSchema<typeof spacetimedb>>;
 
 const MAX_NAME = 24;
+const MAX_PART = 20; // first or last name
+// The 8 bulb colors in the popup (no gold or gray: those mean lit / not lit).
+const BULB_COLORS = ['#1D9E75', '#639922', '#378ADD', '#7F77DD', '#D4537E', '#D85A30', '#A32D2D', '#6E2E73'];
 const MAX_GROUP_NAME = 32;
 const MAX_MEMBERS = 8;
 const MIN_GOAL = 10;
@@ -109,11 +144,18 @@ function membersOf(ctx: Ctx, groupId: bigint) {
   return [...ctx.db.groupMember.groupId.filter(groupId)];
 }
 
+/** Records when the caller boarded their current group. */
+function markJoined(ctx: Ctx) {
+  ctx.db.memberSince.identity.delete(ctx.sender);
+  ctx.db.memberSince.insert({ identity: ctx.sender, joinedAt: ctx.timestamp });
+}
+
 /** Leaves the caller's group, if any. The last one out removes the group. */
 function leaveCurrentGroup(ctx: Ctx) {
   const membership = ctx.db.groupMember.identity.find(ctx.sender);
   if (!membership) return;
   ctx.db.groupMember.identity.delete(ctx.sender);
+  ctx.db.memberSince.identity.delete(ctx.sender);
   if (membersOf(ctx, membership.groupId).length === 0) ctx.db.trainGroup.id.delete(membership.groupId);
 }
 
@@ -123,6 +165,34 @@ export const setName = spacetimedb.reducer({ name: t.string() }, (ctx, { name })
   const me = ctx.db.profile.identity.find(ctx.sender);
   if (me) ctx.db.profile.identity.update({ ...me, name: clean });
   else ctx.db.profile.insert({ identity: ctx.sender, name: clean });
+});
+
+/**
+ * Joins (first call) or edits your character. The display name everyone sees
+ * is "First L." (or just the first name).
+ */
+export const setProfile = spacetimedb.reducer(
+  { firstName: t.string(), lastName: t.string(), color: t.string() },
+  (ctx, { firstName, lastName, color }) => {
+    const first = cleanName(firstName, MAX_PART, 'First name');
+    const last = lastName.trim().replace(/\s+/g, ' ');
+    if (last.length > MAX_PART) throw new SenderError(`Last name must be at most ${MAX_PART} characters.`);
+    if (!BULB_COLORS.includes(color)) throw new SenderError('Pick one of the bulb colors.');
+    const name = last ? `${first} ${last[0].toUpperCase()}.` : first;
+    const me = ctx.db.profile.identity.find(ctx.sender);
+    if (me) ctx.db.profile.identity.update({ ...me, name });
+    else ctx.db.profile.insert({ identity: ctx.sender, name });
+    ctx.db.look.identity.delete(ctx.sender);
+    ctx.db.look.insert({ identity: ctx.sender, firstName: first, lastName: last, color });
+  },
+);
+
+/** Riding solo: your own weekly goal. Kept if you later start or join a group. */
+export const setSoloGoal = spacetimedb.reducer({ weeklyGoal: t.u32() }, (ctx, { weeklyGoal }) => {
+  requireProfile(ctx);
+  checkGoal(weeklyGoal);
+  ctx.db.soloGoal.identity.delete(ctx.sender);
+  ctx.db.soloGoal.insert({ identity: ctx.sender, weeklyGoal });
 });
 
 export const createGroup = spacetimedb.reducer(
@@ -140,19 +210,21 @@ export const createGroup = spacetimedb.reducer(
       createdBy: ctx.sender,
     });
     ctx.db.groupMember.insert({ identity: ctx.sender, groupId: group.id });
+    markJoined(ctx);
   },
 );
 
 export const joinGroup = spacetimedb.reducer({ code: t.string() }, (ctx, { code }) => {
   requireProfile(ctx);
   const group = ctx.db.trainGroup.code.find(code.trim().toUpperCase());
-  if (!group) throw new SenderError('No group has that code.');
+  if (!group) throw new SenderError('No group has that code. Check it with your friend and try again.');
   if (ctx.db.groupMember.identity.find(ctx.sender)?.groupId === group.id) return;
   if (membersOf(ctx, group.id).length >= MAX_MEMBERS) {
-    throw new SenderError(`That train is full (${MAX_MEMBERS} people).`);
+    throw new SenderError(`That train is full. Groups hold up to ${MAX_MEMBERS} people.`);
   }
   leaveCurrentGroup(ctx);
   ctx.db.groupMember.insert({ identity: ctx.sender, groupId: group.id });
+  markJoined(ctx);
 });
 
 export const leaveGroup = spacetimedb.reducer((ctx) => leaveCurrentGroup(ctx));
@@ -201,6 +273,8 @@ export const recordThoughtFirst = spacetimedb.reducer({ day: t.u32(), tier: t.u8
 export const deleteMe = spacetimedb.reducer((ctx) => {
   leaveCurrentGroup(ctx);
   for (const row of [...ctx.db.dailyCount.by_owner_day.filter(ctx.sender)]) ctx.db.dailyCount.id.delete(row.id);
+  ctx.db.look.identity.delete(ctx.sender);
+  ctx.db.soloGoal.identity.delete(ctx.sender);
   ctx.db.profile.identity.delete(ctx.sender);
 });
 
@@ -266,5 +340,48 @@ export const groupCounts = spacetimedb.view(
         miles,
       })),
     );
+  },
+);
+
+export const myLook = spacetimedb.view(
+  { name: 'my_look', public: true },
+  t.option(look.rowType),
+  (ctx) => ctx.db.look.identity.find(ctx.sender) ?? undefined,
+);
+
+export const mySolo = spacetimedb.view(
+  { name: 'my_solo', public: true },
+  t.option(soloGoal.rowType),
+  (ctx) => ctx.db.soloGoal.identity.find(ctx.sender) ?? undefined,
+);
+
+const MemberLook = t.object('MemberLook', {
+  identity: t.identity(),
+  firstName: t.string(),
+  lastName: t.string(),
+  color: t.string(),
+  joinedMicros: t.u64(), // 0 if unknown (joined before join times were kept)
+});
+
+/** Characters and join order of everyone on your train, you included. */
+export const groupLooks = spacetimedb.view(
+  { name: 'group_looks', public: true },
+  t.array(MemberLook),
+  (ctx) => {
+    const membership = ctx.db.groupMember.identity.find(ctx.sender);
+    if (!membership) return [];
+    const rows = [];
+    for (const m of ctx.db.groupMember.groupId.filter(membership.groupId)) {
+      const l = ctx.db.look.identity.find(m.identity);
+      const since = ctx.db.memberSince.identity.find(m.identity);
+      rows.push({
+        identity: m.identity,
+        firstName: l?.firstName ?? '',
+        lastName: l?.lastName ?? '',
+        color: l?.color ?? '',
+        joinedMicros: since?.joinedAt.microsSinceUnixEpoch ?? 0n,
+      });
+    }
+    return rows;
   },
 );

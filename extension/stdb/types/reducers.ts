@@ -15,6 +15,8 @@ import RecordQuestionReducer from "../record_question_reducer";
 import RecordThoughtFirstReducer from "../record_thought_first_reducer";
 import SetGoalReducer from "../set_goal_reducer";
 import SetNameReducer from "../set_name_reducer";
+import SetProfileReducer from "../set_profile_reducer";
+import SetSoloGoalReducer from "../set_solo_goal_reducer";
 
 export type CreateGroupParams = __Infer<typeof CreateGroupReducer>;
 export type DeleteMeParams = __Infer<typeof DeleteMeReducer>;
@@ -25,4 +27,6 @@ export type RecordQuestionParams = __Infer<typeof RecordQuestionReducer>;
 export type RecordThoughtFirstParams = __Infer<typeof RecordThoughtFirstReducer>;
 export type SetGoalParams = __Infer<typeof SetGoalReducer>;
 export type SetNameParams = __Infer<typeof SetNameReducer>;
+export type SetProfileParams = __Infer<typeof SetProfileReducer>;
+export type SetSoloGoalParams = __Infer<typeof SetSoloGoalReducer>;
 

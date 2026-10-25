@@ -10,14 +10,22 @@
 import { STDB_DB, STDB_URI } from './social';
 
 export type Profile = { identity: string; name: string };
-export type Group = { name: string; code: string; weeklyGoal: number };
+export type Group = { id: number; name: string; code: string; weeklyGoal: number };
+/** A person's character: name parts and bulb color. Empty strings if never set. */
+export type Look = { firstName: string; lastName: string; color: string };
+/** A group member's character plus when they boarded (0 = unknown). */
+export type MemberLook = Look & { identity: string; joinedMicros: number };
 /** A group member's day: answers and miles only (the module never shares prompt counts). */
 export type GroupDay = { owner: string; day: number; answers: number; miles: number };
 /** One of your own days. Only you can read prompts and questions. */
 export type Activity = { day: number; prompts: number; questions: number; answers: number; miles: number };
 export type Board = {
   me: Profile | null;
+  look: Look | null;
+  /** Weekly goal when riding solo; null if never set. */
+  soloGoal: number | null;
   group: Group | null;
+  looks: MemberLook[];
   members: Profile[];
   groupDays: GroupDay[];
   mine: Activity[];
@@ -73,19 +81,32 @@ const identityHex = (v: unknown): string => (Array.isArray(v) ? String(v[0]) : S
 
 const toProfile = (r: Record<string, unknown>): Profile => ({ identity: identityHex(r.identity), name: String(r.name) });
 
+const toLook = (r: Record<string, unknown>): Look => ({
+  firstName: String(r.first_name ?? ''),
+  lastName: String(r.last_name ?? ''),
+  color: String(r.color ?? ''),
+});
+
 export async function loadBoard(token: string): Promise<Board> {
-  const [profile, group, members, groupDays, mine] = await Promise.all([
+  const [profile, look, solo, group, members, looks, groupDays, mine] = await Promise.all([
     query(token, 'my_profile'),
+    query(token, 'my_look'),
+    query(token, 'my_solo'),
     query(token, 'my_group'),
     query(token, 'group_members'),
+    query(token, 'group_looks'),
     query(token, 'group_counts'),
     query(token, 'my_counts'),
   ]);
   const g = group[0];
+  const l = look[0];
   return {
     me: profile[0] ? toProfile(profile[0]) : null,
-    group: g ? { name: String(g.name), code: String(g.code), weeklyGoal: Number(g.weekly_goal) } : null,
+    look: l ? toLook(l) : null,
+    soloGoal: solo[0] ? Number(solo[0].weekly_goal) : null,
+    group: g ? { id: Number(g.id), name: String(g.name), code: String(g.code), weeklyGoal: Number(g.weekly_goal) } : null,
     members: members.map(toProfile),
+    looks: looks.map((r) => ({ ...toLook(r), identity: identityHex(r.identity), joinedMicros: Number(r.joined_micros) })),
     groupDays: groupDays.map((r) => ({
       owner: identityHex(r.owner),
       day: Number(r.day),

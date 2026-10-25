@@ -30,6 +30,7 @@ import {
 } from '../core/responseCover';
 import { installPageStyle, setModal, uninstallPageStyle } from '../core/pageEffects';
 import { TurnCoordinator, chatIdFromPath, type Effect } from '../core/turnCoordinator';
+import { ENABLED_KEY, isEnabled } from '../core/consent';
 import { TotPopup, type ThanksStatus } from '../ui/TotPopup';
 import type { ActivityMessage } from './background';
 
@@ -63,6 +64,15 @@ export default defineContentScript({
     installPageStyle(UI_NAME);
 
     const coord = new TurnCoordinator(chatIdFromPath(location.pathname));
+
+    // Until the student turns tot on (welcome page), sends pass through untouched:
+    // nothing is covered, classified or counted (CLAUDE.md §9 consent).
+    let enabled = await isEnabled();
+    const onConsentChange = (changes: Record<string, unknown>, area: string) => {
+      if (area === 'local' && ENABLED_KEY in changes) void isEnabled().then((on) => (enabled = on));
+    };
+    browser.storage.onChanged.addListener(onConsentChange);
+    ctx.onInvalidated(() => browser.storage.onChanged.removeListener(onConsentChange));
     const deadlines = new Map<string, ReturnType<typeof setTimeout>>();
     const awaitingNode: string[] = []; // turnIds whose assistant reply hasn't appeared yet
     const turnKeyOf = new Map<string, string>(); // turnId → data-turn-key
@@ -239,6 +249,7 @@ export default defineContentScript({
 
     // ---- Send detection ----------------------------------------------------
     function onSend(source: 'enter' | 'click') {
+      if (!enabled) return;
       const composer = getComposer();
       if (!composer || isComposerEmpty(composer)) return;
       const prompt = getComposerText(composer);

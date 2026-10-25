@@ -3,6 +3,6 @@
 
 import { createRoot } from 'react-dom/client';
 import { TrainPopup } from '../../ui/TrainPopup';
-import '../../ui/friends.css';
+import '../../ui/train.css';
 
 createRoot(document.getElementById('root')!).render(<TrainPopup />);
