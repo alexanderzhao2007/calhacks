@@ -2,11 +2,11 @@
 // history, and the skip confirm. Takes a SidebarRequest and emits a
 // SidebarResult; knows nothing about Claude's DOM. Styles live in tot.css.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SidebarRequest, SidebarResult } from '@shared/contracts';
 import { COPY } from './copy';
 
-/** composing: /compose is running. pasting / nothing: ready, auto-close counting down. */
+/** composing: /compose is writing the note for Claude. pasting / nothing: the note is ready or skipped. */
 export type ThanksStatus = 'composing' | 'pasting' | 'nothing';
 
 export type PopupProps = {
@@ -16,7 +16,7 @@ export type PopupProps = {
   onResult: (result: SidebarResult) => void;
 };
 
-const THANKS_CLOSE_S = 4;
+const THANKS_CLOSE_S = 3;
 
 export function TotPopup({ request, judging, thanks, onResult }: PopupProps) {
   if (!request) return null;
@@ -131,21 +131,25 @@ function Popup({ request, judging, onResult }: Omit<PopupProps, 'thanks'> & { re
   );
 }
 
-// Shown after the student's last answer, so tot never just disappears. Closes
-// itself a few seconds after the message for Claude is ready.
+// Shown after the student's last answer, so tot never just disappears and the
+// student knows where the note in Claude's message box comes from. Counts down
+// from the moment it opens; if it closes before the note is ready, the note is
+// pasted when it arrives.
 function Thanks({ status, onClose }: { status: ThanksStatus; onClose: () => void }) {
   const [left, setLeft] = useState(THANKS_CLOSE_S);
-  const counting = status !== 'composing';
+  const composing = status === 'composing';
+  // Parent re-renders pass a new onClose; keep the countdown from restarting.
+  const close = useRef(onClose);
+  close.current = onClose;
 
   useEffect(() => {
-    if (!counting) return;
     if (left <= 0) {
-      onClose();
+      close.current();
       return;
     }
     const t = setTimeout(() => setLeft((n) => n - 1), 1000);
     return () => clearTimeout(t);
-  }, [counting, left, onClose]);
+  }, [left]);
 
   return (
     <div className="tot-backdrop">
@@ -155,9 +159,9 @@ function Thanks({ status, onClose }: { status: ThanksStatus; onClose: () => void
         aria-modal="true"
         aria-labelledby="tot-thanks-title"
         aria-describedby="tot-thanks-body"
-        aria-busy={!counting}
+        aria-busy={composing}
       >
-        {!counting && (
+        {composing && (
           <svg className="tot-trace" aria-hidden="true">
             <rect x="0" y="0" width="100%" height="100%" rx="16" pathLength={100} />
           </svg>
@@ -172,7 +176,7 @@ function Thanks({ status, onClose }: { status: ThanksStatus; onClose: () => void
           {COPY.thanks[status]}
         </p>
         <div className="tot-actions">
-          <span className="tot-hint">{counting ? COPY.thanks.closingIn(Math.max(left, 0)) : ''}</span>
+          <span className="tot-hint">{COPY.thanks.closingIn(Math.max(left, 0))}</span>
           <button type="button" className="tot-btn tot-btn-primary" autoFocus onClick={onClose}>
             {COPY.thanks.close}
           </button>

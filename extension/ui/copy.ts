@@ -20,9 +20,9 @@ export const COPY = {
   },
   thanks: {
     title: 'Thanks for thinking it through.',
-    composing: 'Turning your thinking into a message for Claude…',
-    pasting: "Next, your thinking goes into Claude's message box. Press Send when you want Claude to build on it.",
-    nothing: "Claude's answer is ready.",
+    composing: 'Turning your answers into a short note for Claude, so it knows how you approached this…',
+    pasting: 'Your answers are now a short note for Claude in your message box. Edit it if you like, then press Send.',
+    nothing: 'Not enough to pass on to Claude this time, so your message box stays empty.',
     close: 'Close',
     closingIn: (s: number) => `Closing in ${s}s`,
   },
