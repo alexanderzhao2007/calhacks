@@ -100,16 +100,41 @@ export function answerTextLength(assistant: HTMLElement): number {
 }
 
 /**
- * Put text into the ProseMirror composer so its internal state updates.
+ * Put text at the start of the ProseMirror composer, above any draft, so its
+ * internal state updates. Resolves true only if the text actually landed.
+ */
+export async function insertComposerTextAtStart(composer: HTMLElement, text: string): Promise<boolean> {
+  if (isComposerEmpty(composer)) return insertComposerText(composer, text);
+  const before = composer.innerText;
+  composer.focus();
+  const first = composer.firstElementChild ?? composer;
+  const range = document.createRange();
+  range.setStart(first, 0);
+  range.collapse(true);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+  // ProseMirror syncs its selection from selectionchange, which fires async.
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  pasteText(composer, `${text}\n\n`);
+  const squash = (s: string) => s.replace(/\s+/g, '');
+  const after = squash(composer.innerText);
+  return after.startsWith(squash(text)) && after.includes(squash(before));
+}
+
+function pasteText(composer: HTMLElement, text: string) {
+  const dt = new DataTransfer();
+  dt.setData('text/plain', text);
+  composer.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+}
+
+/**
+ * Put text into the empty ProseMirror composer so its internal state updates.
  * Tries a synthetic paste first (keeps paragraphs), then execCommand.
  */
 export function insertComposerText(composer: HTMLElement, text: string): boolean {
   composer.focus();
-  const dt = new DataTransfer();
-  dt.setData('text/plain', text);
-  composer.dispatchEvent(
-    new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }),
-  );
+  pasteText(composer, text);
   if (!isComposerEmpty(composer)) return true;
   document.execCommand('insertText', false, text);
   return !isComposerEmpty(composer);

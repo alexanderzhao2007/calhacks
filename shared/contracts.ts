@@ -50,19 +50,59 @@ export const ClassifyResponseSchema = z
   );
 export type ClassifyResponse = z.infer<typeof ClassifyResponseSchema>;
 
+export const QAPairSchema = z.object({
+  question: z.string(), // what tot asked
+  answer: z.string(), // what the student typed
+});
+export type QAPair = z.infer<typeof QAPairSchema>;
+
 export const SidebarRequestSchema = z.object({
   turnId: z.string().min(1),
   question: z.string().min(1),
   originalPrompt: z.string(),
+  history: z.array(QAPairSchema).optional(), // earlier rounds, shown above a follow-up question
 });
 export type SidebarRequest = z.infer<typeof SidebarRequestSchema>;
 
+// 'answer' submits the student's reply to the question currently shown. The
+// coordinator decides (via /follow-up) whether to ask again or hand off.
 export const SidebarResultSchema = z.discriminatedUnion('action', [
   z.object({
-    action: z.literal('continue'),
+    action: z.literal('answer'),
     turnId: z.string().min(1),
-    studentReasoning: z.string().min(1),
+    answer: z.string().min(1),
   }),
   z.object({ action: z.literal('skip'), turnId: z.string().min(1) }),
 ]);
 export type SidebarResult = z.infer<typeof SidebarResultSchema>;
+
+// ---- Follow-up judging (TOT_PROMPTS.md §6) ---------------------------------
+
+export const MAX_FOLLOW_UPS = 2;
+
+export const FollowUpRequestSchema = z.object({
+  requestId: z.string().min(1),
+  mode: z.enum(['solve', 'brainstorm']),
+  prompt: z.string(), // the original student message
+  conversationContext: z.array(ContextTurnSchema).optional(),
+  attachments: z.array(AttachmentMetaSchema),
+  qaHistory: z.array(QAPairSchema).min(1), // last entry is the answer being judged
+  followUpsUsed: z.number().int().min(0),
+});
+export type FollowUpRequest = z.infer<typeof FollowUpRequestSchema>;
+
+export const FollowUpResponseSchema = z
+  .object({
+    requestId: z.string().min(1),
+    decision: z.enum(['pass', 'follow_up']),
+    reason: z.string(),
+    question: z.string().nullable(), // nonempty only if follow_up
+  })
+  .refine(
+    (r) =>
+      r.decision === 'follow_up'
+        ? typeof r.question === 'string' && r.question.trim().length > 0
+        : r.question === null,
+    { message: 'question must be nonempty for follow_up and null otherwise' },
+  );
+export type FollowUpResponse = z.infer<typeof FollowUpResponseSchema>;

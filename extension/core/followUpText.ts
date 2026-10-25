@@ -1,12 +1,18 @@
-// Pure follow-up formatting (CLAUDE.md §4 example). Uses the student's exact words.
+// Pure follow-up formatting (tot-handoff prompts/followup.md). Uses the
+// student's exact words; a trailing period is stripped so sentences don't end "..".
 
-export function formatFollowUp(studentReasoning: string): string {
-  return [
-    'I want to work through my earlier question rather than just receive a finished solution.',
-    '',
-    'My initial approach (my own words):',
-    `"${studentReasoning.trim()}"`,
-    '',
-    'Please evaluate whether this reasoning is on track, point out any misconception, and help me identify the next step with a hint or question. Avoid immediately restating the complete solution unless I explicitly ask for it.',
-  ].join('\n');
+import type { QAPair } from '@shared/contracts';
+
+const CLOSING =
+  'Please assess whether this reasoning is on track, point out any misconception, and guide the next step without immediately restating the whole solution.';
+
+const clean = (s: string) => s.trim().replace(/\.+$/, '');
+
+export function formatFollowUp(qaHistory: QAPair[]): string {
+  const [first, ...rest] = qaHistory.filter((p) => p.answer.trim().length > 0);
+  if (!first) return '';
+  const parts = [`My initial approach is: ${clean(first.answer)}.`];
+  for (const p of rest) parts.push(`When asked "${p.question.trim()}", I added: ${clean(p.answer)}.`);
+  parts.push(CLOSING);
+  return parts.join(' ');
 }

@@ -1,18 +1,18 @@
 // Claude content script: wires the adapter, the CSS cover, the pure turn
-// coordinator, the background classifier, and the sidebar together.
+// coordinator, the background classifier, and the tot popup together.
 // Rule of thumb: on anything unexpected, reveal.
 
 import ReactDOM from 'react-dom/client';
-import type { ClassifyRequest, SidebarRequest, SidebarResult } from '@shared/contracts';
+import '../ui/tot.css';
+import type { ClassifyRequest, FollowUpRequest, QAPair, SidebarRequest, SidebarResult } from '@shared/contracts';
 import {
   answerTextLength,
   getAssistantMessages,
   getComposer,
   getComposerText,
-  getEnabledSendButton,
   getTurnKey,
   getUserMessages,
-  insertComposerText,
+  insertComposerTextAtStart,
   isComposerEmpty,
   isSendButtonTarget,
   lockComposerFocus,
@@ -29,23 +29,26 @@ import {
   uninstallCoverStyle,
 } from '../core/responseCover';
 import { formatFollowUp } from '../core/followUpText';
+import { installPageStyle, setModal, uninstallPageStyle } from '../core/pageEffects';
 import { TurnCoordinator, chatIdFromPath, type Effect } from '../core/turnCoordinator';
-import { TotPanel, type PanelProps } from '../ui/PlaceholderSidebar';
+import { TotPopup } from '../ui/TotPopup';
 
 const DEADLINE_MS = 10000;
-const SEND_BUTTON_WAIT_MS = 60_000; // the held answer may still be streaming
-const FOLLOWUP_CONFIRM_MS = 10_000;
+const FOLLOW_UP_DEADLINE_MS = 4000; // judging an answer; failure hands off
 const USER_CHECKED_ATTR = 'data-tot-checked';
+const UI_NAME = 'tot-panel'; // also the shadow host's tag, kept unblurred
 
 const log = (...args: unknown[]) => console.log('[tot]', ...args);
 
 export default defineContentScript({
   matches: ['https://claude.ai/*'],
   runAt: 'document_idle',
+  cssInjectionMode: 'ui', // tot.css goes into the shadow root, not the page
 
   async main(ctx) {
     log('content script loaded', location.pathname);
     installCoverStyle();
+    installPageStyle(UI_NAME);
 
     const coord = new TurnCoordinator(chatIdFromPath(location.pathname));
     const deadlines = new Map<string, ReturnType<typeof setTimeout>>();
@@ -56,14 +59,10 @@ export default defineContentScript({
     const sendTime = new Map<string, number>();
 
     // ---- UI ----------------------------------------------------------------
-    let panel: Omit<PanelProps, 'onResult' | 'onRevealHeld' | 'onDismissNotice'> = {
-      request: null,
-      notice: null,
-      copyText: null,
-      heldTurnIds: [],
-    };
+    let panel: { request: SidebarRequest | null; judging: boolean } = { request: null, judging: false };
+    const heldTurnIds = new Set<string>(); // turns whose original answer is held behind the popup
     const ui = await createShadowRootUi(ctx, {
-      name: 'tot-panel',
+      name: UI_NAME,
       position: 'inline',
       anchor: 'body',
       append: 'last',
@@ -94,16 +93,10 @@ export default defineContentScript({
       { capture: true },
     );
     const render = () =>
-      ui.mounted?.render(
-        <TotPanel
-          {...panel}
-          onResult={(r) => apply(onSidebarResult(r))}
-          onRevealHeld={revealHeld}
-          onDismissNotice={() => setPanel({ notice: null, copyText: null })}
-        />,
-      );
+      ui.mounted?.render(<TotPopup {...panel} onResult={(r) => apply(onSidebarResult(r))} />);
     const setPanel = (patch: Partial<typeof panel>) => {
       panel = { ...panel, ...patch };
+      setModal(panel.request !== null); // blur Claude's page while the popup is open
       render();
     };
 
@@ -123,11 +116,15 @@ export default defineContentScript({
           case 'closeSidebar':
             if (panel.request?.turnId === fx.turnId) {
               unlockComposerFocus();
-              setPanel({ request: null });
+              setPanel({ request: null, judging: false });
             }
             break;
+          case 'judgeAnswer':
+            setPanel({ judging: true });
+            void judgeAnswer(fx.turnId, fx.request);
+            break;
           case 'submitFollowUp':
-            void submitFollowUp(fx.turnId, fx.studentReasoning);
+            void submitFollowUp(fx.turnId, fx.qaHistory);
             break;
           case 'revealAll':
             revealEverything(fx.reason);
@@ -158,7 +155,7 @@ export default defineContentScript({
       }
       const node = findNode(turnId);
       if (node) markSeen(node);
-      setPanel({ heldTurnIds: panel.heldTurnIds.filter((id) => id !== turnId) });
+      heldTurnIds.delete(turnId);
       const started = sendTime.get(turnId);
       log('reveal', { turnId, reason, msSinceSend: started ? Math.round(performance.now() - started) : null });
     }
@@ -171,11 +168,18 @@ export default defineContentScript({
       unlockComposerFocus();
       for (const el of getAssistantMessages()) markSeen(el);
       setPending(false);
-      setPanel({ request: null, notice: null, copyText: null, heldTurnIds: [] });
+      heldTurnIds.clear();
+      setPanel({ request: null, judging: false });
       log('revealAll', reason);
     }
 
     function openSidebar(request: SidebarRequest) {
+      if (heldTurnIds.has(request.turnId)) {
+        // A follow-up question for a turn whose answer is already held.
+        setPanel({ request, judging: false });
+        log('follow-up question', { turnId: request.turnId });
+        return;
+      }
       const node = findNode(request.turnId);
       const key = turnKeyOf.get(request.turnId) ?? (node && getTurnKey(node));
       if (key) turnKeyOf.set(request.turnId, key);
@@ -186,19 +190,13 @@ export default defineContentScript({
         return;
       }
       hold(key);
-      setPanel({ request, heldTurnIds: [...panel.heldTurnIds, request.turnId] });
+      heldTurnIds.add(request.turnId);
+      setPanel({ request, judging: false });
       log('intervene', { turnId: request.turnId, msSinceSend: Math.round(performance.now() - (sendTime.get(request.turnId) ?? 0)) });
     }
 
     function onSidebarResult(result: SidebarResult): Effect[] {
-      return coord.onSidebarResult(result);
-    }
-
-    function revealHeld(turnId: string) {
-      const effects = coord.onRevealRequested(turnId);
-      // Coordinator may already be DONE; release the hold regardless.
-      if (effects.length) apply(effects);
-      else reveal(turnId, 'user-reveal');
+      return coord.onSidebarResult(result, performance.now());
     }
 
     function findNode(turnId: string): HTMLElement | null {
@@ -255,7 +253,24 @@ export default defineContentScript({
         result = { ok: false, error: String(e) };
       }
       log('classified', { turnId, ok: result.ok, ms: Math.round(performance.now() - startedAt) });
-      apply(coord.onClassifyResult(turnId, result));
+      apply(coord.onClassifyResult(turnId, result, performance.now()));
+    }
+
+    async function judgeAnswer(turnId: string, req: FollowUpRequest) {
+      const startedAt = performance.now();
+      const timeout = new Promise<{ ok: false; error: string }>((r) =>
+        setTimeout(() => r({ ok: false, error: 'timeout' }), FOLLOW_UP_DEADLINE_MS + 500),
+      );
+      let result: { ok: true; res: unknown } | { ok: false; error: string };
+      try {
+        const reply = browser.runtime.sendMessage({ type: 'tot:followUp', req, deadlineMs: FOLLOW_UP_DEADLINE_MS });
+        result = await Promise.race([reply, timeout]);
+        if (!result || typeof result !== 'object') result = { ok: false, error: 'empty response' };
+      } catch (e) {
+        result = { ok: false, error: String(e) };
+      }
+      log('judged', { turnId, ok: result.ok, ms: Math.round(performance.now() - startedAt) });
+      apply(coord.onFollowUpResult(turnId, result, performance.now()));
     }
 
     ctx.addEventListener(
@@ -307,54 +322,26 @@ export default defineContentScript({
         if (el.hasAttribute(USER_CHECKED_ATTR)) continue;
         el.setAttribute(USER_CHECKED_ATTR, '');
         const confirmed = coord.onUserMessageObserved(el.textContent ?? '');
-        if (confirmed) {
-          log('follow-up confirmed in thread', confirmed);
-          followUpWaiters.get(confirmed)?.();
-        }
+        if (confirmed) log('follow-up confirmed in thread', confirmed);
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
     // ---- Follow-up submission ---------------------------------------------
-    const followUpWaiters = new Map<string, () => void>();
-
-    async function submitFollowUp(turnId: string, studentReasoning: string) {
-      const text = formatFollowUp(studentReasoning);
+    // Pastes the follow-up into Claude's composer, above any draft, silently
+    // (HANDOFF.md §3). Never sends it: the student presses Send. Any failure is
+    // silent; the answer is already revealed.
+    async function submitFollowUp(turnId: string, qaHistory: QAPair[]) {
+      const text = formatFollowUp(qaHistory);
       unlockComposerFocus(); // we're about to focus and type into it ourselves
       const composer = getComposer();
-      if (!composer) {
-        setPanel({ notice: "tot couldn't find Claude's message box. Copy your follow-up and paste it.", copyText: text });
+      if (!text || !composer) {
+        log('follow-up not placed: no composer', turnId);
         return;
       }
-      if (!isComposerEmpty(composer)) {
-        setPanel({ notice: 'You have an unsent draft, so tot did not overwrite it. Copy your follow-up and send it when ready.', copyText: text });
-        return;
-      }
-      if (!coord.markFollowUpPending(turnId, text)) return; // already submitting
-      if (!insertComposerText(composer, text)) {
-        setPanel({ notice: "tot couldn't type into Claude's message box. Copy your follow-up and paste it.", copyText: text });
-        return;
-      }
-
-      const confirmed = new Promise<boolean>((resolve) => {
-        followUpWaiters.set(turnId, () => resolve(true));
-        setTimeout(() => resolve(false), SEND_BUTTON_WAIT_MS + FOLLOWUP_CONFIRM_MS);
-      });
-
-      const btn = await waitFor(getEnabledSendButton, SEND_BUTTON_WAIT_MS, () =>
-        setPanel({ notice: 'Your follow-up is ready in the message box. It will send when Claude finishes the hidden reply.' }),
-      );
-      if (!btn) {
-        setPanel({ notice: 'Your follow-up is in the message box. Press Enter to send it.' });
-      } else if (coord.getTurn(turnId)?.phase === 'SUBMIT_FOLLOWUP') {
-        btn.click();
-        log('follow-up send clicked', turnId);
-      }
-
-      const ok = await confirmed;
-      followUpWaiters.delete(turnId);
-      if (ok) setPanel({ notice: null, copyText: null });
-      else setPanel({ notice: "tot couldn't confirm the follow-up was sent. Check the chat.", copyText: text });
+      if (!coord.markFollowUpPending(turnId, text)) return; // already placed
+      const landed = await insertComposerTextAtStart(composer, text);
+      log(landed ? 'follow-up placed in composer' : 'follow-up paste not verified', turnId);
     }
 
     // ---- Navigation & teardown --------------------------------------------
@@ -367,23 +354,7 @@ export default defineContentScript({
       unlockComposerFocus();
       revealEverything('extension invalidated');
       uninstallCoverStyle();
+      uninstallPageStyle();
     });
   },
 });
-
-/** Poll for a value; calls onSlow once if it isn't available within 500 ms. */
-async function waitFor<T>(get: () => T | null, timeoutMs: number, onSlow?: () => void): Promise<T | null> {
-  const start = performance.now();
-  let warned = false;
-  for (;;) {
-    const v = get();
-    if (v) return v;
-    const elapsed = performance.now() - start;
-    if (elapsed > timeoutMs) return null;
-    if (!warned && elapsed > 500) {
-      warned = true;
-      onSlow?.();
-    }
-    await new Promise((r) => setTimeout(r, 100));
-  }
-}

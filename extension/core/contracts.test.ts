@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ClassifyResponseSchema, SidebarResultSchema } from '@shared/contracts';
+import { ClassifyResponseSchema, FollowUpResponseSchema, SidebarResultSchema } from '@shared/contracts';
 
 describe('ClassifyResponseSchema', () => {
   it('requires a question only for intervene', () => {
@@ -13,11 +13,19 @@ describe('ClassifyResponseSchema', () => {
 });
 
 describe('SidebarResultSchema', () => {
-  it('accepts continue and skip', () => {
+  it('accepts answer and skip', () => {
     expect(SidebarResultSchema.safeParse({ action: 'skip', turnId: 't' }).success).toBe(true);
-    expect(
-      SidebarResultSchema.safeParse({ action: 'continue', turnId: 't', studentReasoning: 'idea' }).success,
-    ).toBe(true);
-    expect(SidebarResultSchema.safeParse({ action: 'continue', turnId: 't' }).success).toBe(false);
+    expect(SidebarResultSchema.safeParse({ action: 'answer', turnId: 't', answer: 'idea' }).success).toBe(true);
+    expect(SidebarResultSchema.safeParse({ action: 'answer', turnId: 't' }).success).toBe(false);
+  });
+});
+
+describe('FollowUpResponseSchema', () => {
+  it('requires a question only for follow_up', () => {
+    const base = { requestId: 'r', reason: 'x' };
+    expect(FollowUpResponseSchema.safeParse({ ...base, decision: 'pass', question: null }).success).toBe(true);
+    expect(FollowUpResponseSchema.safeParse({ ...base, decision: 'pass', question: 'q' }).success).toBe(false);
+    expect(FollowUpResponseSchema.safeParse({ ...base, decision: 'follow_up', question: 'q?' }).success).toBe(true);
+    expect(FollowUpResponseSchema.safeParse({ ...base, decision: 'follow_up', question: ' ' }).success).toBe(false);
   });
 });

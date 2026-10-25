@@ -1,0 +1,312 @@
+/* tot popup styles, injected into the shadow root (cssInjectionMode: 'ui').
+   Tokens and measurements: tot-handoff design/tokens.css and HANDOFF.md §4.
+   Fonts are registered on the page by core/pageEffects.ts. */
+
+:host {
+  /* Raw palette */
+  --tot-gold: #f2b300;
+  --tot-charcoal: #2f4858;
+  --tot-muted: #5e6e79;
+  --tot-line: #e3e8eb;
+  --tot-line-strong: #d5dce1;
+  --tot-white: #ffffff;
+  --tot-night: #1c2830;
+  --tot-night-raised: #22313b;
+  --tot-night-line: #33434e;
+  --tot-night-line-strong: #3e5262;
+  --tot-mist: #e8eef1;
+  --tot-mist-muted: #a9b7c0;
+  --tot-icon-edge-dark: #48616f;
+
+  /* Type */
+  --tot-font-brand: 'Quicksand', system-ui, sans-serif;
+  --tot-font-ui: 'Figtree', system-ui, sans-serif;
+  --tot-weight-question: 500;
+  --tot-weight-body: 400;
+  --tot-weight-button: 600;
+  --tot-size-question: 22px;
+  --tot-size-confirm-title: 20px;
+  --tot-size-field: 15px;
+  --tot-size-button: 15px;
+  --tot-size-small: 13px;
+
+  /* Shape and space */
+  --tot-popup-width: 540px;
+  --tot-popup-padding: 32px;
+  --tot-popup-gap: 20px;
+  --tot-radius-popup: 16px;
+  --tot-radius-field: 10px;
+  --tot-radius-pill: 22px;
+  --tot-hit: 44px;
+  --tot-icon-question: 32px;
+
+  /* Motion */
+  --tot-trace-duration: 2.8s;
+  --tot-trace-dash: 12 88;
+
+  /* Semantic, light */
+  --tot-surface: var(--tot-white);
+  --tot-border: transparent;
+  --tot-text: var(--tot-charcoal);
+  --tot-text-muted: var(--tot-muted);
+  --tot-placeholder: var(--tot-muted);
+  --tot-field-bg: var(--tot-white);
+  --tot-field-border: var(--tot-line-strong);
+  --tot-history-bg: #f4f7f9;
+  --tot-history-border: var(--tot-line);
+  --tot-primary-bg: var(--tot-charcoal);
+  --tot-primary-text: var(--tot-white);
+  --tot-secondary-border: var(--tot-line-strong);
+  --tot-secondary-text: var(--tot-charcoal);
+  --tot-trace: var(--tot-charcoal);
+  --tot-icon-edge: transparent;
+  --tot-backdrop: rgba(20, 20, 20, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --tot-surface: var(--tot-night);
+    --tot-border: var(--tot-night-line);
+    --tot-text: var(--tot-mist);
+    --tot-text-muted: var(--tot-mist-muted);
+    --tot-placeholder: #8c9ba5;
+    --tot-field-bg: var(--tot-night-raised);
+    --tot-field-border: var(--tot-night-line-strong);
+    --tot-history-bg: var(--tot-night-raised);
+    --tot-history-border: var(--tot-night-line);
+    --tot-primary-bg: var(--tot-gold);
+    --tot-primary-text: var(--tot-night);
+    --tot-secondary-border: var(--tot-night-line-strong);
+    --tot-secondary-text: var(--tot-mist);
+    --tot-trace: var(--tot-mist);
+    --tot-icon-edge: var(--tot-icon-edge-dark);
+    --tot-backdrop: rgba(0, 0, 0, 0.55);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.tot-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: var(--tot-backdrop);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.tot-popup {
+  position: relative;
+  width: min(var(--tot-popup-width), 100%);
+  background: var(--tot-surface);
+  border: 1px solid var(--tot-border);
+  border-radius: var(--tot-radius-popup);
+  padding: var(--tot-popup-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--tot-popup-gap);
+  color: var(--tot-text);
+  font-family: var(--tot-font-ui);
+  font-weight: var(--tot-weight-body);
+  font-size: var(--tot-size-field);
+  line-height: 1.45;
+  text-align: left;
+}
+
+/* Follow-up history: column-reverse so it opens scrolled to the newest question. */
+.tot-history {
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 14px;
+  padding-right: 6px;
+}
+.tot-history > * {
+  flex-shrink: 0;
+}
+.tot-history-q {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--tot-text-muted);
+}
+.tot-history-a {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--tot-text-muted);
+  background: var(--tot-history-bg);
+  border: 1px solid var(--tot-history-border);
+  border-radius: var(--tot-radius-field);
+  padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tot-history-rule {
+  height: 1px;
+  background: var(--tot-history-border);
+}
+.tot-history:focus-visible {
+  outline: 2px solid var(--tot-text);
+  outline-offset: 2px;
+}
+
+.tot-question-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.tot-icon {
+  width: var(--tot-icon-question);
+  height: var(--tot-icon-question);
+  flex-shrink: 0;
+}
+.tot-icon .edge {
+  stroke: var(--tot-icon-edge);
+}
+.tot-question {
+  margin: 0;
+  font-family: var(--tot-font-brand);
+  font-weight: var(--tot-weight-question);
+  font-size: var(--tot-size-question);
+  line-height: 1.35;
+  color: var(--tot-text);
+}
+
+.tot-field {
+  display: block;
+  width: 100%;
+  height: 120px;
+  margin: 0;
+  resize: none;
+  border: 1px solid var(--tot-field-border);
+  border-radius: var(--tot-radius-field);
+  background: var(--tot-field-bg);
+  color: var(--tot-text);
+  padding: 12px;
+  font-family: var(--tot-font-ui);
+  font-weight: var(--tot-weight-body);
+  font-size: var(--tot-size-field);
+  line-height: 1.45;
+}
+.tot-field::placeholder {
+  color: var(--tot-placeholder);
+  opacity: 1;
+}
+.tot-field:focus {
+  outline: none;
+}
+.tot-field:focus-visible {
+  outline: 2px solid var(--tot-text);
+  outline-offset: 2px;
+}
+
+.tot-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tot-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.tot-hint {
+  font-size: var(--tot-size-small);
+  color: var(--tot-text-muted);
+}
+.tot-skip {
+  background: none;
+  border: 0;
+  padding: 0 4px;
+  min-height: var(--tot-hit);
+  font-family: var(--tot-font-ui);
+  font-size: var(--tot-size-small);
+  color: var(--tot-text-muted);
+  cursor: pointer;
+}
+.tot-btn {
+  min-height: var(--tot-hit);
+  padding: 0 24px;
+  border-radius: var(--tot-radius-pill);
+  font-family: var(--tot-font-ui);
+  font-size: var(--tot-size-button);
+  font-weight: var(--tot-weight-button);
+  cursor: pointer;
+}
+.tot-btn-primary {
+  background: var(--tot-primary-bg);
+  color: var(--tot-primary-text);
+  border: 0;
+}
+.tot-btn-secondary {
+  background: transparent;
+  color: var(--tot-secondary-text);
+  border: 1px solid var(--tot-secondary-border);
+}
+.tot-btn:focus-visible,
+.tot-skip:focus-visible {
+  outline: 2px solid var(--tot-text);
+  outline-offset: 2px;
+}
+.tot-popup[aria-busy='true'] button,
+.tot-popup[aria-busy='true'] .tot-field {
+  pointer-events: none;
+}
+
+/* Judging: a short line traces the popup's edge. */
+.tot-trace {
+  position: absolute;
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  overflow: visible;
+  pointer-events: none;
+}
+.tot-trace rect {
+  fill: none;
+  stroke: var(--tot-trace);
+  stroke-width: 2;
+  stroke-dasharray: var(--tot-trace-dash);
+  animation: tot-trace var(--tot-trace-duration) linear infinite;
+}
+@keyframes tot-trace {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+/* Skip confirm */
+.tot-confirm {
+  width: min(400px, 100%);
+  padding: 28px;
+  gap: 24px;
+}
+.tot-confirm-title {
+  margin: 0;
+  font-family: var(--tot-font-brand);
+  font-weight: var(--tot-weight-question);
+  font-size: var(--tot-size-confirm-title);
+  color: var(--tot-text);
+}
+.tot-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tot-trace rect {
+    animation: none;
+    stroke-dasharray: none;
+    opacity: 0.5;
+  }
+}

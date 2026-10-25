@@ -11,6 +11,10 @@
     "compile": "npm run compile -w extension",
     "test": "npm run test -w extension",
     "dev:api": "npm run dev -w api",
-    "test:api": "npm run test -w api"
+    "test:api": "npm run test -w api",
+    "start": "concurrently -k -n api,ext -c cyan,magenta \"npm run dev -w api\" \"npm run dev -w extension\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.5"
   }
 }

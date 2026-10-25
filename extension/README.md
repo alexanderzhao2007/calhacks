@@ -4,7 +4,8 @@ From the repo root:
 
 ```sh
 npm install        # installs the workspace
-npm run dev        # launches Chrome with the extension; profile persists in extension/.chrome-profile
+npm start          # classifier API + extension together (auto-runs on folder open in VS Code)
+npm run dev        # extension only: dev build with live reload (load extension/.output/chrome-mv3-dev unpacked in Chrome once)
 npm test           # vitest unit tests
 npm run compile    # typecheck
 npm run build      # production build → extension/.output/chrome-mv3 (load unpacked)

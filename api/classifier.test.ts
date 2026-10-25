@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it } from 'vitest';
 import { ClassifyResponseSchema, type ClassifyRequest } from '../shared/contracts.ts';
-import { buildUserTurn, classify, FALLBACK_QUESTIONS, loadSystemPrompt, neutralizeTags, postProcess } from './classifier.ts';
+import { buildUserTurn, classify, FALLBACK_QUESTIONS, loadSystemPrompt, postProcess } from './classifier.ts';
+import { neutralizeTags } from './promptText.ts';
 
 const req = (over: Partial<ClassifyRequest> = {}): ClassifyRequest => ({
   requestId: 'r1',

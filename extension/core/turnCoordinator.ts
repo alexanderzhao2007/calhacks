@@ -4,14 +4,19 @@
 
 import {
   ClassifyResponseSchema,
+  FollowUpResponseSchema,
+  MAX_FOLLOW_UPS,
   type AttachmentMeta,
+  type FollowUpRequest,
+  type QAPair,
   type SidebarRequest,
   type SidebarResult,
 } from '@shared/contracts';
 
 export type TurnPhase =
   | 'CLASSIFYING'
-  | 'INTERVENING'
+  | 'INTERVENING' // a question is shown, waiting for the student's answer
+  | 'JUDGING' // /follow-up is deciding whether the answer holds thinking
   | 'SUBMIT_FOLLOWUP'
   | 'FOLLOWUP_SENT'
   | 'DONE';
@@ -24,6 +29,11 @@ export type Turn = {
   phase: TurnPhase;
   startedAt: number;
   expectedFollowUp?: string;
+  mode: 'solve' | 'brainstorm';
+  currentQuestion: string;
+  qaHistory: QAPair[]; // every tot question and the student's answer, in order
+  followUpsUsed: number;
+  openedAt: number; // when the popup first opened
 };
 
 export type Effect =
@@ -31,12 +41,16 @@ export type Effect =
   | { type: 'cancelDeadline'; turnId: string }
   | { type: 'openSidebar'; request: SidebarRequest }
   | { type: 'closeSidebar'; turnId: string }
-  | { type: 'submitFollowUp'; turnId: string; studentReasoning: string }
+  | { type: 'judgeAnswer'; turnId: string; request: FollowUpRequest }
+  | { type: 'submitFollowUp'; turnId: string; qaHistory: QAPair[] }
   | { type: 'revealAll'; reason: 'navigation' };
 
-export type RevealReason = 'allow' | 'uncertain' | 'invalid' | 'error' | 'timeout' | 'skip';
+export type RevealReason = 'allow' | 'uncertain' | 'invalid' | 'error' | 'timeout' | 'skip' | 'continue';
 
 export const NEW_CHAT = 'new';
+
+/** No new follow-up question once this long has passed since the popup opened (HANDOFF.md §3). */
+export const FOLLOW_UP_WINDOW_MS = 30_000;
 
 /** `/chat/<id>` → id; anything else on claude.ai (e.g. `/new`, `/`) → NEW_CHAT. */
 export function chatIdFromPath(pathname: string): string {
@@ -83,6 +97,11 @@ export class TurnCoordinator {
       attachments: input.attachments ?? [],
       phase: 'CLASSIFYING',
       startedAt: input.now,
+      mode: 'solve',
+      currentQuestion: '',
+      qaHistory: [],
+      followUpsUsed: 0,
+      openedAt: input.now,
     };
     this.turns.set(turn.turnId, turn);
     return turn;
@@ -92,6 +111,7 @@ export class TurnCoordinator {
   onClassifyResult(
     turnId: string,
     result: { ok: true; res: unknown } | { ok: false; error: string },
+    now = 0,
   ): Effect[] {
     const turn = this.turns.get(turnId);
     if (!turn || turn.phase !== 'CLASSIFYING') return []; // stale, duplicate, or timed out
@@ -106,6 +126,9 @@ export class TurnCoordinator {
     if (res.decision === 'uncertain') return this.finish(turn, 'uncertain');
 
     turn.phase = 'INTERVENING';
+    turn.mode = res.mode === 'brainstorm' ? 'brainstorm' : 'solve';
+    turn.currentQuestion = res.question!;
+    turn.openedAt = now;
     return [
       { type: 'cancelDeadline', turnId },
       {
@@ -122,18 +145,69 @@ export class TurnCoordinator {
     return this.finish(turn, 'timeout');
   }
 
-  onSidebarResult(result: SidebarResult): Effect[] {
+  onSidebarResult(result: SidebarResult, now = 0): Effect[] {
     const turn = this.turns.get(result.turnId);
-    if (!turn || turn.phase !== 'INTERVENING') return [];
+    if (!turn) return [];
 
+    // Skip works while a question is shown and while an answer is being judged.
     if (result.action === 'skip') {
+      if (turn.phase !== 'INTERVENING' && turn.phase !== 'JUDGING') return [];
       return [{ type: 'closeSidebar', turnId: turn.turnId }, ...this.finish(turn, 'skip')];
     }
-    turn.phase = 'SUBMIT_FOLLOWUP';
+
+    if (turn.phase !== 'INTERVENING') return []; // duplicate submit
+    turn.qaHistory.push({ question: turn.currentQuestion, answer: result.answer.trim() });
+    if (this.outOfRounds(turn, now)) return this.handOff(turn); // no model call
+
+    turn.phase = 'JUDGING';
     return [
-      { type: 'closeSidebar', turnId: turn.turnId },
-      { type: 'submitFollowUp', turnId: turn.turnId, studentReasoning: result.studentReasoning },
+      {
+        type: 'judgeAnswer',
+        turnId: turn.turnId,
+        request: {
+          requestId: turn.turnId,
+          mode: turn.mode,
+          prompt: turn.prompt,
+          attachments: turn.attachments,
+          qaHistory: turn.qaHistory.map((p) => ({ ...p })),
+          followUpsUsed: turn.followUpsUsed,
+        },
+      },
     ];
+  }
+
+  /** Raw /follow-up output (or failure). Anything but a valid follow_up hands off. */
+  onFollowUpResult(
+    turnId: string,
+    result: { ok: true; res: unknown } | { ok: false; error: string },
+    now = 0,
+  ): Effect[] {
+    const turn = this.turns.get(turnId);
+    if (!turn || turn.phase !== 'JUDGING') return []; // skipped, navigated, or duplicate
+
+    const parsed = result.ok ? FollowUpResponseSchema.safeParse(result.res) : null;
+    const res = parsed?.success && parsed.data.requestId === turnId ? parsed.data : null;
+    if (!res || res.decision === 'pass' || this.outOfRounds(turn, now)) return this.handOff(turn);
+
+    turn.followUpsUsed += 1;
+    turn.currentQuestion = res.question!;
+    turn.phase = 'INTERVENING';
+    return [
+      {
+        type: 'openSidebar',
+        request: {
+          turnId,
+          question: res.question!,
+          originalPrompt: turn.prompt,
+          history: turn.qaHistory.map((p) => ({ ...p })),
+        },
+      },
+    ];
+  }
+
+  /** Follow-up cap, or the round window since the popup opened has passed. */
+  private outOfRounds(turn: Turn, now: number): boolean {
+    return turn.followUpsUsed >= MAX_FOLLOW_UPS || now - turn.openedAt >= FOLLOW_UP_WINDOW_MS;
   }
 
   /** Call right before clicking Send, with the exact text placed in the composer. */
@@ -164,7 +238,7 @@ export class TurnCoordinator {
     const turn = this.turns.get(turnId);
     if (!turn || turn.phase === 'DONE') return [];
     const closing: Effect[] =
-      turn.phase === 'INTERVENING' ? [{ type: 'closeSidebar', turnId }] : [];
+      turn.phase === 'INTERVENING' || turn.phase === 'JUDGING' ? [{ type: 'closeSidebar', turnId }] : [];
     return [...closing, ...this.finish(turn, 'skip')];
   }
 
@@ -191,12 +265,37 @@ export class TurnCoordinator {
     return false;
   }
 
+  /**
+   * The follow-up sits in the composer until the student sends it, and they may
+   * edit it first. An exact match is confirmed later from the thread; any other
+   * send while a follow-up is pending is treated as the (edited) follow-up and
+   * closes that turn, so it is never classified and never blocks later sends.
+   */
   private isExpectedFollowUp(prompt: string): boolean {
     const norm = normalizeText(prompt);
+    let pending: Turn | undefined;
     for (const t of this.turns.values()) {
-      if (t.phase === 'SUBMIT_FOLLOWUP' && t.expectedFollowUp === norm) return true;
+      if (t.phase !== 'SUBMIT_FOLLOWUP' || !t.expectedFollowUp || t.chatId !== this.chatId) continue;
+      if (t.expectedFollowUp === norm) return true;
+      pending = t;
     }
-    return false;
+    if (!pending) return false;
+    pending.phase = 'FOLLOWUP_SENT';
+    return true;
+  }
+
+  /**
+   * The student's thinking is in: close the sidebar, uncover the original answer,
+   * and place the follow-up in the composer. The turn stays in SUBMIT_FOLLOWUP so
+   * the follow-up send is still recognized as tot's own.
+   */
+  private handOff(turn: Turn): Effect[] {
+    turn.phase = 'SUBMIT_FOLLOWUP';
+    return [
+      { type: 'closeSidebar', turnId: turn.turnId },
+      { type: 'reveal', turnId: turn.turnId, reason: 'continue' },
+      { type: 'submitFollowUp', turnId: turn.turnId, qaHistory: turn.qaHistory.map((p) => ({ ...p })) },
+    ];
   }
 
   private finish(turn: Turn, reason: RevealReason): Effect[] {

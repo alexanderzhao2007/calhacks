@@ -1,12 +1,14 @@
-// Minimal HTTP wrapper around the classifier: POST /classify, GET /health.
+// Minimal HTTP wrapper: POST /classify (prompt 1), POST /follow-up (prompt 2),
+// GET /health.
 // Plain node:http so it runs locally and ports to any serverless host.
 // Logs metadata only, never prompt text (CLAUDE.md §9).
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
-import { ClassifyRequestSchema } from '../shared/contracts.ts';
+import { ClassifyRequestSchema, FollowUpRequestSchema } from '../shared/contracts.ts';
 import { classify, DEFAULT_MODEL, DEFAULT_TIMEOUT_MS, loadSystemPrompt } from './classifier.ts';
+import { DEFAULT_FOLLOW_UP_TIMEOUT_MS, judgeAnswer, loadFollowUpPrompt } from './followUp.ts';
 
 try {
   process.loadEnvFile(fileURLToPath(new URL('../.env', import.meta.url)));
@@ -17,6 +19,7 @@ try {
 const PORT = Number(process.env.PORT) || 8787;
 const MODEL = process.env.TOT_MODEL || DEFAULT_MODEL;
 const TIMEOUT_MS = Number(process.env.TOT_CLASSIFY_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
+const FOLLOW_UP_TIMEOUT_MS = Number(process.env.TOT_FOLLOW_UP_TIMEOUT_MS) || DEFAULT_FOLLOW_UP_TIMEOUT_MS;
 const ALLOWED_ORIGINS = (process.env.TOT_ALLOWED_ORIGINS ?? '')
   .split(',')
   .map((o) => o.trim())
@@ -24,11 +27,12 @@ const ALLOWED_ORIGINS = (process.env.TOT_ALLOWED_ORIGINS ?? '')
 const MAX_BODY_BYTES = 64 * 1024;
 
 if (!process.env.ANTHROPIC_API_KEY) {
-  console.warn('[tot-api] ANTHROPIC_API_KEY is not set; every classify call will fail open.');
+  console.warn('[tot-api] ANTHROPIC_API_KEY is not set; every model call will fail open.');
 }
 
 const client = new Anthropic();
 const systemPrompt = loadSystemPrompt();
+const followUpPrompt = loadFollowUpPrompt();
 
 function send(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -56,23 +60,9 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
-const server = createServer(async (req, res) => {
-  applyCors(req, res);
-  const path = new URL(req.url ?? '/', 'http://localhost').pathname;
-
-  if (req.method === 'OPTIONS') return void res.writeHead(204).end();
-  if (req.method === 'GET' && path === '/health') return send(res, 200, { ok: true, model: MODEL });
-  if (req.method !== 'POST' || path !== '/classify') return send(res, 404, { error: 'not found' });
-
-  let body: unknown;
-  try {
-    body = await readJson(req);
-  } catch {
-    return send(res, 400, { error: 'invalid JSON body' });
-  }
+async function handleClassify(body: unknown, res: ServerResponse) {
   const parsed = ClassifyRequestSchema.safeParse(body);
   if (!parsed.success) return send(res, 400, { error: 'invalid ClassifyRequest' });
-
   const { res: result, latencyMs, cacheReadTokens } = await classify(parsed.data, {
     client,
     systemPrompt,
@@ -81,6 +71,7 @@ const server = createServer(async (req, res) => {
   });
   console.log(
     JSON.stringify({
+      route: 'classify',
       requestId: result.requestId,
       decision: result.decision,
       mode: result.mode,
@@ -90,6 +81,52 @@ const server = createServer(async (req, res) => {
     }),
   );
   send(res, 200, result);
+}
+
+async function handleFollowUp(body: unknown, res: ServerResponse) {
+  const parsed = FollowUpRequestSchema.safeParse(body);
+  if (!parsed.success) return send(res, 400, { error: 'invalid FollowUpRequest' });
+  const { res: result, latencyMs, cacheReadTokens } = await judgeAnswer(parsed.data, {
+    client,
+    systemPrompt: followUpPrompt,
+    model: MODEL,
+    timeoutMs: FOLLOW_UP_TIMEOUT_MS,
+  });
+  console.log(
+    JSON.stringify({
+      route: 'follow-up',
+      requestId: result.requestId,
+      decision: result.decision,
+      reason: result.reason,
+      followUpsUsed: parsed.data.followUpsUsed,
+      latencyMs,
+      cacheReadTokens,
+    }),
+  );
+  send(res, 200, result);
+}
+
+const routes: Record<string, (body: unknown, res: ServerResponse) => Promise<void>> = {
+  '/classify': handleClassify,
+  '/follow-up': handleFollowUp,
+};
+
+const server = createServer(async (req, res) => {
+  applyCors(req, res);
+  const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+
+  if (req.method === 'OPTIONS') return void res.writeHead(204).end();
+  if (req.method === 'GET' && path === '/health') return send(res, 200, { ok: true, model: MODEL });
+  const handler = routes[path];
+  if (req.method !== 'POST' || !handler) return send(res, 404, { error: 'not found' });
+
+  let body: unknown;
+  try {
+    body = await readJson(req);
+  } catch {
+    return send(res, 400, { error: 'invalid JSON body' });
+  }
+  await handler(body, res);
 });
 
 server.listen(PORT, () => {

@@ -2,12 +2,12 @@
 // Prompt and post-processing rules: TOT_PROMPTS.md §5 and §7. Every failure
 // path returns `uncertain`, which the extension treats as "reveal".
 
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import type { ClassifyRequest, ClassifyResponse, Mode } from '../shared/contracts.ts';
+import { attachmentsSection, contextSection, loadPrompt, studentMessageSection } from './promptText.ts';
 
 export const DEFAULT_MODEL = 'claude-sonnet-5-5';
 export const DEFAULT_TIMEOUT_MS = 9800; // inside the extension's 10 s cover budget
@@ -20,8 +20,6 @@ export const FALLBACK_QUESTIONS = {
 } as const;
 
 const MAX_QUESTION_CHARS = 300;
-const MAX_CONTEXT_TURNS = 4;
-const MAX_CONTEXT_CHARS = 400;
 
 // What the model is constrained to emit (TOT_PROMPTS.md §5 output schema).
 export const ModelOutputSchema = z.object({
@@ -32,38 +30,13 @@ export const ModelOutputSchema = z.object({
 export type ModelOutput = z.infer<typeof ModelOutputSchema>;
 
 export function loadSystemPrompt(path = process.env.TOT_CLASSIFY_PROMPT_PATH || DEFAULT_PROMPT_PATH): string {
-  const text = readFileSync(path, 'utf8').trim();
-  if (!text) throw new Error(`System prompt at ${path} is empty`);
-  return text;
-}
-
-// Student text goes inside our XML-like tags. Neutralize any of our tag names
-// so a message cannot close its section early or fake a new one.
-const OUR_TAGS = /<(\/?)(conversation_context|attachments|student_message)\b/gi;
-export function neutralizeTags(text: string): string {
-  return text.replace(OUR_TAGS, (_m, slash: string, name: string) => `<\\${slash}${name}`);
-}
-
-function truncate(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}…` : text;
+  return loadPrompt(path);
 }
 
 export function buildUserTurn(req: ClassifyRequest): string {
-  const parts: string[] = [];
-
-  const context = (req.conversationContext ?? []).slice(-MAX_CONTEXT_TURNS);
-  if (context.length > 0) {
-    const lines = context.map((t) => `[${t.role}] ${neutralizeTags(truncate(t.text.trim(), MAX_CONTEXT_CHARS))}`);
-    parts.push(`<conversation_context>\n${lines.join('\n')}\n</conversation_context>`);
-  }
-
-  if (req.attachments.length > 0) {
-    const meta = req.attachments.map((a) => ({ name: a.name ?? '', type: a.mimeType ?? '' }));
-    parts.push(`<attachments>\n${neutralizeTags(JSON.stringify(meta))}\n</attachments>`);
-  }
-
-  parts.push(`<student_message>\n${neutralizeTags(req.prompt)}\n</student_message>`);
-  return parts.join('\n');
+  return [contextSection(req.conversationContext), attachmentsSection(req.attachments), studentMessageSection(req.prompt)]
+    .filter((s) => s !== null)
+    .join('\n');
 }
 
 function failOpen(requestId: string, reason: string): ClassifyResponse {

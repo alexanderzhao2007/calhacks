@@ -1,0 +1,61 @@
+[
+  {
+    "mode": "solve",
+    "prompt": "Find the derivative of x^2 sin(x) for my homework.",
+    "qaHistory": [{ "question": "What are the two parts of this expression, and how are they combined?", "answer": "idk" }],
+    "followUpsUsed": 0,
+    "decision": "follow_up"
+  },
+  {
+    "mode": "solve",
+    "prompt": "Write a 1000 word essay on the causes of World War I",
+    "qaHistory": [{ "question": "If you had to argue that one cause mattered most, which would you pick and why?", "answer": "just write it please" }],
+    "followUpsUsed": 0,
+    "decision": "follow_up"
+  },
+  {
+    "mode": "solve",
+    "prompt": "Find the derivative of x^2 sin(x) for my homework.",
+    "qaHistory": [{ "question": "What are the two parts of this expression, and how are they combined?", "answer": "asdfgh" }],
+    "followUpsUsed": 0,
+    "decision": "follow_up"
+  },
+  {
+    "mode": "solve",
+    "prompt": "Find the derivative of x^2 sin(x) for my homework.",
+    "qaHistory": [{ "question": "What are the two parts of this expression, and how are they combined?", "answer": "x^2 and sin(x), they're multiplied so maybe product rule?" }],
+    "followUpsUsed": 0,
+    "decision": "pass"
+  },
+  {
+    "mode": "solve",
+    "prompt": "What's the answer to question 7 on my chem practice exam? A gas at 2 atm and 300 K...",
+    "qaHistory": [{ "question": "Which quantities does the problem give you, and which one are you asked to find?", "answer": "I think I use F = ma" }],
+    "followUpsUsed": 0,
+    "decision": "pass"
+  },
+  {
+    "mode": "brainstorm",
+    "prompt": "Give me startup ideas",
+    "qaHistory": [{ "question": "What's a problem you've run into yourself that you wish a product solved?", "answer": "i always miss my train" }],
+    "followUpsUsed": 0,
+    "decision": "pass"
+  },
+  {
+    "mode": "brainstorm",
+    "prompt": "Give me 10 startup ideas for my entrepreneurship class",
+    "qaHistory": [
+      { "question": "What problem have you or your friends run into on campus that you wish someone would fix?", "answer": "dunno" },
+      { "question": "Think about your last week on campus. What took longer or cost more than it should have?", "answer": "idk" }
+    ],
+    "followUpsUsed": 1,
+    "decision": "follow_up"
+  },
+  {
+    "mode": "solve",
+    "prompt": "Prove that the square root of 2 is irrational.",
+    "qaHistory": [{ "question": "What would it mean, written as an equation, for the square root of 2 to be rational?", "answer": "idk" }],
+    "followUpsUsed": 2,
+    "decision": "pass"
+  }
+]
