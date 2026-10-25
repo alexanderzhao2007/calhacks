@@ -1,0 +1,19 @@
+{
+  "name": "tot-db",
+  "private": true,
+  "version": "0.0.1",
+  "description": "tot friends + streaks: SpacetimeDB module",
+  "scripts": {
+    "build": "spacetime build",
+    "publish:local": "spacetime publish tot --server http://127.0.0.1:3100 --yes",
+    "publish:cloud": "spacetime publish tot --server maincloud --yes",
+    "generate": "spacetime generate --lang typescript --out-dir ../extension/stdb --module-path .",
+    "start": "spacetime start --listen-addr 127.0.0.1:3100"
+  },
+  "dependencies": {
+    "spacetimedb": "2.13.*"
+  },
+  "devDependencies": {
+    "typescript": "~5.6.2"
+  }
+}

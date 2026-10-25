@@ -19,10 +19,16 @@ export default defineConfig({
     name: 'tot',
     description:
       'Train of thought: a quick nudge to try your own reasoning before reading the AI answer.',
-    // Keep permissions minimal (CLAUDE.md §9): claude.ai plus the classifier
-    // origin. Swap the localhost entry for the deployed API origin later.
+    // Keep permissions minimal (CLAUDE.md §9): claude.ai, the classifier origin,
+    // and SpacetimeDB for the opt-in friends board (local dev server + Maincloud).
+    // Swap the localhost entries for the deployed origins later.
     permissions: ['storage'],
-    host_permissions: ['https://claude.ai/*', 'http://localhost:8787/*'],
+    host_permissions: [
+      'https://claude.ai/*',
+      'http://localhost:8787/*',
+      'http://127.0.0.1:3100/*',
+      'https://maincloud.spacetimedb.com/*',
+    ],
     // Brand fonts are registered on claude.ai's document for the popup.
     web_accessible_resources: [{ resources: ['fonts/*.woff2'], matches: ['https://claude.ai/*'] }],
   },

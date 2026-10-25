@@ -129,6 +129,8 @@ export default defineContentScript({
             break;
           case 'showThanks':
             setPanel({ judging: false, thanks: 'composing' });
+            // Counts toward the friends board if the student has joined; fire and forget.
+            browser.runtime.sendMessage({ type: 'tot:thoughtFirst' }).catch(() => {});
             break;
           case 'composeFollowUp':
             void composeFollowUp(fx.turnId, fx.request);

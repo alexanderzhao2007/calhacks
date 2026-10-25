@@ -1,0 +1,25 @@
+{
+  "popup": {
+    "fieldPlaceholder": "Type your thinking",
+    "fieldAriaLabel": "Your thinking",
+    "submit": "Submit",
+    "submitHint": "or press Enter",
+    "skip": "Skip"
+  },
+  "skipConfirm": {
+    "title": "See the response now?",
+    "stay": "Keep thinking",
+    "stayIsPrimary": true,
+    "leave": "Show answer"
+  },
+  "followUp": {
+    "historyAriaLabel": "Previous questions and answers"
+  },
+  "brand": {
+    "slogan": "Get taught, not told.",
+    "landingBody": "It’s easy to hand your thinking to AI. tot asks one quick question before the answer, so thinking first becomes a habit, one problem at a time.",
+    "landingButton": "Download tot",
+    "landingFootnote": "Free Chrome extension. No timers, no blocking."
+  },
+  "exampleQuestion": "Which integration technique would you try first, and what feature of the expression suggests it?"
+}

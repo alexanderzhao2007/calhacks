@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "extension",
-    "api"
+    "api",
+    "db"
   ],
   "scripts": {
     "dev": "npm run dev -w extension",
@@ -12,7 +13,10 @@
     "test": "npm run test -w extension",
     "dev:api": "npm run dev -w api",
     "test:api": "npm run test -w api",
-    "start": "concurrently -k -n api,ext -c cyan,magenta \"npm run dev -w api\" \"npm run dev -w extension\""
+    "start": "concurrently -k -n api,ext -c cyan,magenta \"npm run dev -w api\" \"npm run dev -w extension\"",
+    "db:start": "npm run start -w db",
+    "db:publish": "npm run publish:local -w db",
+    "db:generate": "npm run generate -w db"
   },
   "devDependencies": {
     "concurrently": "^9.2.5"

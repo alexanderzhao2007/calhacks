@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tot: get taught, not told</title>
+  <meta name="description" content="tot is a free Chrome extension that asks you one quick question before AI does the thinking for you.">
+  <meta name="color-scheme" content="light">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 128 128'%3E%3Crect width='128' height='128' rx='30' fill='%232F4858'/%3E%3Ccircle cx='64' cy='54' r='30' fill='%23F2B300'/%3E%3Crect x='52' y='89' width='24' height='8' rx='3' fill='%23FFFFFF'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;700&family=Figtree:wght@400;600&display=swap" rel="stylesheet">
+  <script>document.documentElement.className = 'js';</script>
+  <style>
+    /* Tokens from tot-handoff/design/tokens.css. The page itself is light (the intro "turns the
+       lights on"); the popup demo carries the semantic tokens and switches light/dark. */
+    :root {
+      --tot-gold: #F2B300;
+      --tot-charcoal: #2F4858;
+      --tot-muted: #5E6E79;
+      --tot-line: #E3E8EB;
+      --tot-line-strong: #D5DCE1;
+      --tot-white: #FFFFFF;
+      --tot-night: #1C2830;
+      --tot-night-raised: #22313B;
+      --tot-night-line: #33434E;
+      --tot-night-line-strong: #3E5262;
+      --tot-mist: #E8EEF1;
+      --tot-mist-muted: #A9B7C0;
+      --tot-icon-edge-dark: #48616F;
+
+      --tot-font-brand: 'Quicksand', system-ui, sans-serif;
+      --tot-font-ui: 'Figtree', system-ui, sans-serif;
+
+      --tot-popup-width: 540px;
+      --tot-popup-padding: 32px;
+      --tot-popup-gap: 20px;
+      --tot-radius-popup: 16px;
+      --tot-radius-field: 10px;
+      --tot-radius-pill: 22px;
+      --tot-hit: 44px;
+      --tot-icon-question: 32px;
+      --tot-backdrop-blur: 6px;
+      --tot-trace-duration: 2.8s;
+      --tot-trace-dash: 12 88;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--tot-white);
+      color: var(--tot-charcoal);
+      font-family: var(--tot-font-ui);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ---------- Hero + intro (from tot-handoff/reference/landing.html) ---------- */
+    .stage {
+      --s: 1;
+      position: relative;
+      min-height: 100vh;
+      min-height: 100svh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 72px 16px 96px;
+      font-family: var(--tot-font-brand);
+    }
+    .page { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .header { position: relative; z-index: 3; display: flex; align-items: center; gap: calc(28px * var(--s)); }
+    .tile { position: relative; width: calc(112px * var(--s)); height: calc(112px * var(--s)); border-radius: calc(26px * var(--s)); background: var(--tot-charcoal); }
+    .bulbph { position: absolute; left: calc(30px * var(--s)); top: calc(21px * var(--s)); width: calc(52px * var(--s)); height: calc(52px * var(--s)); border-radius: 50%; }
+    .bar1 { position: absolute; left: calc(45.5px * var(--s)); top: calc(78px * var(--s)); width: calc(21px * var(--s)); height: calc(7px * var(--s)); border-radius: 3px; background: var(--tot-white); }
+    .bar2 { position: absolute; left: calc(49px * var(--s)); top: calc(88.5px * var(--s)); width: calc(14px * var(--s)); height: calc(5px * var(--s)); border-radius: 3px; background: var(--tot-white); }
+    .htxt { font-size: calc(76px * var(--s)); font-weight: 700; line-height: 1; letter-spacing: -0.01em; }
+    h1 { margin: 64px 0 0; font-size: clamp(44px, 7.2vw, 104px); font-weight: 400; line-height: 1.05; letter-spacing: -0.01em; }
+    .lead { margin: 28px 0 0; max-width: 760px; font-family: var(--tot-font-ui); font-size: clamp(18px, 2.2vw, 26px); line-height: 1.5; color: var(--tot-muted); }
+    .cta {
+      display: inline-flex; align-items: center; justify-content: center;
+      margin-top: 44px; min-height: 64px; padding: 0 48px; border-radius: 999px;
+      background: var(--tot-charcoal); color: var(--tot-white);
+      font-family: var(--tot-font-ui); font-size: clamp(19px, 2vw, 24px); font-weight: 600;
+      text-decoration: none; transition: background-color .15s ease;
+    }
+    .cta:hover { background: color-mix(in srgb, var(--tot-charcoal) 86%, var(--tot-white)); }
+    .cta:focus { outline: none; }
+    .cta:focus-visible { outline: 3px solid var(--tot-charcoal); outline-offset: 4px; }
+    .foot { margin: 18px 0 0; font-family: var(--tot-font-ui); font-size: clamp(15px, 1.4vw, 18px); color: var(--tot-muted); }
+    .scroll-hint { margin-top: 28px; font-family: var(--tot-font-ui); font-size: 15px; color: var(--tot-muted); text-decoration: none; }
+    .scroll-hint:hover { color: var(--tot-charcoal); }
+
+    .overlay, .bigwrap, .ball { display: none; }
+    .js .overlay { display: block; position: absolute; inset: 0; z-index: 2; background: var(--tot-night); }
+    .js .bigwrap { display: flex; position: absolute; inset: 0; z-index: 3; align-items: center; justify-content: center; pointer-events: none; }
+    .big { font-size: clamp(96px, 20vw, 200px); font-weight: 700; line-height: 1; letter-spacing: -0.01em; color: var(--tot-mist); white-space: nowrap; }
+    .spacer { display: inline-block; vertical-align: baseline; width: 0.5em; height: 0.5em; margin: 0 0.035em; }
+    .js .ball { display: block; position: absolute; z-index: 4; pointer-events: none; }
+    .ball div { width: 100%; height: 100%; }
+    .core { border-radius: 50%; background: var(--tot-icon-edge-dark); }
+    .replay {
+      position: absolute; z-index: 5; right: 24px; bottom: 24px; min-height: 44px; padding: 0 18px;
+      border: 1px solid var(--tot-line); border-radius: 22px; background: var(--tot-white); color: var(--tot-charcoal);
+      font-family: var(--tot-font-ui); font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    .replay:focus-visible { outline: 2px solid var(--tot-charcoal); outline-offset: 2px; }
+
+    /* Without JS: show the end state. */
+    .no-js .bulbph { background: var(--tot-gold); }
+    .no-js .replay { display: none; }
+
+    /* Before the intro runs */
+    .js .stage .big, .js .stage .ball, .js .stage .htxt, .js .stage .tile, .js .stage .bars, .js .stage .replay { opacity: 0; }
+
+    @keyframes big{0%{opacity:0;transform:translate(0,0) scale(1)}4.7%,51.6%{opacity:1;transform:translate(0,0) scale(1);animation-timing-function:cubic-bezier(.6,0,.3,1)}62.5%{opacity:1}67.2%,100%{opacity:0;transform:translate(var(--gx),var(--gy)) scale(var(--gk))}}
+    @keyframes btravel{0%,4.7%{opacity:0;transform:translate(0,0) scale(1)}6%{opacity:1;transform:translate(0,0) scale(1)}51.6%{opacity:1;transform:translate(0,0) scale(1);animation-timing-function:cubic-bezier(.6,0,.3,1)}67.2%,100%{opacity:1;transform:translate(var(--dx),var(--dy)) scale(var(--k))}}
+    @keyframes bx{0%,4.7%{transform:translateX(-900px);animation-timing-function:cubic-bezier(.25,.55,.35,1)}45%,100%{transform:translateX(0)}}
+    @keyframes by{0%,4.7%{transform:translateY(-300px);animation-timing-function:ease-in}14%{transform:translateY(0);animation-timing-function:ease-out}22.7%{transform:translateY(-160px);animation-timing-function:ease-in}29.8%{transform:translateY(0);animation-timing-function:ease-out}35.6%{transform:translateY(-66px);animation-timing-function:ease-in}39.8%{transform:translateY(0);animation-timing-function:ease-out}42.8%{transform:translateY(-16px);animation-timing-function:ease-in}45%,100%{transform:translateY(0)}}
+    @keyframes bsq{0%,12.5%{transform:scale(1,1)}14%{transform:scale(1.2,0.78)}16.5%,28.3%{transform:scale(1,1)}29.8%{transform:scale(1.13,0.87)}32%,38.3%{transform:scale(1,1)}39.8%{transform:scale(1.06,0.94)}41.5%,100%{transform:scale(1,1)}}
+    @keyframes blight{0%,70.3%{background:#48616F;box-shadow:0 0 0 0 rgba(242,179,0,0)}71%{background:#F2B300;box-shadow:0 0 18px 4px rgba(242,179,0,0.4)}72%{background:#55655E;box-shadow:0 0 0 0 rgba(242,179,0,0)}73.4%{background:#F2B300;box-shadow:0 0 22px 5px rgba(242,179,0,0.45)}74.5%{background:#B8901F;box-shadow:0 0 6px 0 rgba(242,179,0,0.2)}76%{background:#F2B300;box-shadow:0 0 40px 10px rgba(242,179,0,0.5)}90%,100%{background:#F2B300;box-shadow:0 0 0 0 rgba(242,179,0,0)}}
+    @keyframes htxt{0%,62.5%{opacity:0;color:#E8EEF1}67.2%,80.4%{opacity:1;color:#E8EEF1}81.6%{color:#2F4858}83%{color:#E8EEF1}86%,100%{opacity:1;color:#2F4858}}
+    @keyframes tile{0%,60.9%{opacity:0;transform:scale(0.85)}67.2%,100%{opacity:1;transform:scale(1)}}
+    @keyframes bars{0%,65.6%{opacity:0}68.8%,100%{opacity:1}}
+    @keyframes flick{0%,78%{opacity:1;visibility:visible}79.2%{opacity:0.3}80.4%{opacity:0.85}81.6%{opacity:0.12}83%{opacity:0.55}86%{opacity:0;visibility:visible}100%{opacity:0;visibility:hidden}}
+    @keyframes rp{0%,96%{opacity:0}100%{opacity:1}}
+    .run .big{animation:big 6.4s both}
+    .run .ball{animation:btravel 6.4s both}
+    .run .bx{animation:bx 6.4s both}
+    .run .by{animation:by 6.4s both}
+    .run .bsq{animation:bsq 6.4s both;transform-origin:50% 100%}
+    .run .core{animation:blight 6.4s both}
+    .run .htxt{animation:htxt 6.4s both}
+    .run .tile{animation:tile 6.4s both}
+    .run .bars{animation:bars 6.4s both}
+    .run .overlay{animation:flick 6.4s both}
+    .run .replay{animation:rp 6.4s both}
+
+    /* After the intro (or with reduced motion): static end state, so resizing can't misplace the ball. */
+    .js .stage.done .overlay, .js .stage.done .bigwrap, .js .stage.done .ball { display: none; }
+    .js .stage.done .htxt, .js .stage.done .tile, .js .stage.done .bars, .js .stage.done .replay { opacity: 1; animation: none; color: var(--tot-charcoal); transform: none; }
+    .stage.done .bulbph { background: var(--tot-gold); }
+    @media (prefers-reduced-motion: reduce) {
+      .js .stage .replay { display: none; }
+      .cta { transition: none; }
+    }
+
+    @media (max-width: 640px) {
+      .stage { --s: 0.72; padding-top: 56px; }
+      h1 { margin-top: 44px; }
+      .cta { width: 100%; max-width: 320px; }
+      .replay { right: 16px; bottom: 16px; }
+    }
+
+    /* ---------- Sections ---------- */
+    section { padding: 96px 16px; }
+    section + section { border-top: 1px solid var(--tot-line); }
+    .wrap { max-width: 1040px; margin: 0 auto; }
+    .eyebrow { margin: 0; font-size: 15px; font-weight: 600; color: var(--tot-muted); }
+    h2.title { margin: 8px 0 0; font-family: var(--tot-font-brand); font-weight: 400; font-size: clamp(34px, 4.6vw, 56px); line-height: 1.1; letter-spacing: -0.01em; }
+    .sub { margin: 16px 0 0; max-width: 640px; font-size: clamp(17px, 1.6vw, 20px); color: var(--tot-muted); }
+
+    .steps { list-style: none; margin: 48px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; counter-reset: step; }
+    .steps li { counter-increment: step; }
+    .steps li::before {
+      content: counter(step); display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
+      background: var(--tot-charcoal); color: var(--tot-white); font-family: var(--tot-font-brand); font-weight: 700; font-size: 18px;
+    }
+    .steps h3 { margin: 18px 0 0; font-family: var(--tot-font-brand); font-weight: 500; font-size: 22px; line-height: 1.3; }
+    .steps p { margin: 8px 0 0; font-size: 16px; color: var(--tot-muted); }
+    .quiet { margin: 48px 0 0; padding: 20px 24px; border-radius: 16px; background: #F4F7F9; font-size: 17px; }
+    .quiet strong { font-weight: 600; }
+
+    @media (max-width: 760px) {
+      section { padding: 72px 16px; }
+      .steps { grid-template-columns: 1fr; gap: 28px; }
+    }
+
+    /* ---------- Popup demo (from tot-handoff/reference/popup.html) ---------- */
+    .demo-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+    .theme-toggle { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--tot-line); border-radius: 22px; }
+    .theme-toggle button { min-height: 36px; padding: 0 16px; border: 0; border-radius: 18px; background: transparent; color: var(--tot-charcoal); font: 600 14px var(--tot-font-ui); cursor: pointer; }
+    .theme-toggle button[aria-pressed="true"] { background: var(--tot-charcoal); color: var(--tot-white); }
+    .theme-toggle button:focus-visible { outline: 2px solid var(--tot-charcoal); outline-offset: 2px; }
+
+    .demo {
+      /* Semantic tokens, light */
+      --tot-surface: var(--tot-white);
+      --tot-border: transparent;
+      --tot-text: var(--tot-charcoal);
+      --tot-text-muted: var(--tot-muted);
+      --tot-placeholder: var(--tot-muted);
+      --tot-field-bg: var(--tot-white);
+      --tot-field-border: var(--tot-line-strong);
+      --tot-history-bg: #F4F7F9;
+      --tot-history-border: var(--tot-line);
+      --tot-primary-bg: var(--tot-charcoal);
+      --tot-primary-text: var(--tot-white);
+      --tot-secondary-border: var(--tot-line-strong);
+      --tot-secondary-text: var(--tot-charcoal);
+      --tot-trace: var(--tot-charcoal);
+      --tot-icon-edge: transparent;
+      --tot-backdrop: rgba(20, 20, 20, 0.45);
+      /* Stand-in for Claude's page; neutral on purpose */
+      --host-bg: #F4F4F4; --host-side: #E4E4E4; --host-user: #E0E0E0; --host-line: #D2D2D2;
+      --host-composer: #FFFFFF; --host-composer-border: #BDBDBD; --host-text: #1A1A1A; --host-muted: #6B6B6B;
+
+      position: relative; margin-top: 40px; height: 600px; border-radius: 20px; overflow: hidden;
+      border: 1px solid var(--tot-line); box-shadow: 0 24px 60px -30px rgba(28, 40, 48, 0.35);
+      color-scheme: light;
+    }
+    .demo[data-theme="dark"] {
+      --tot-surface: var(--tot-night);
+      --tot-border: var(--tot-night-line);
+      --tot-text: var(--tot-mist);
+      --tot-text-muted: var(--tot-mist-muted);
+      --tot-placeholder: #8C9BA5;
+      --tot-field-bg: var(--tot-night-raised);
+      --tot-field-border: var(--tot-night-line-strong);
+      --tot-history-bg: var(--tot-night-raised);
+      --tot-history-border: var(--tot-night-line);
+      --tot-primary-bg: var(--tot-gold);
+      --tot-primary-text: var(--tot-night);
+      --tot-secondary-border: var(--tot-night-line-strong);
+      --tot-secondary-text: var(--tot-mist);
+      --tot-trace: var(--tot-mist);
+      --tot-icon-edge: var(--tot-icon-edge-dark);
+      --tot-backdrop: rgba(0, 0, 0, 0.55);
+      --host-bg: #212121; --host-side: #171717; --host-user: #2F2F2F; --host-line: #3A3A3A;
+      --host-composer: #2A2A2A; --host-composer-border: #3A3A3A; --host-text: #ECECEC; --host-muted: #9A9A9A;
+      color-scheme: dark;
+    }
+
+    .host { position: absolute; inset: 0; display: flex; background: var(--host-bg); color: var(--host-text); font: 15px system-ui, sans-serif; transition: filter .2s; }
+    .host-side { width: 200px; background: var(--host-side); }
+    .host-main { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 40px 16px 20px; min-width: 0; }
+    .host-thread { width: min(640px, 100%); flex: 1; display: flex; flex-direction: column; gap: 24px; }
+    .host-user { align-self: flex-end; background: var(--host-user); border-radius: 12px; padding: 12px 16px; }
+    .host-answer { display: flex; flex-direction: column; gap: 12px; }
+    .host-answer i { display: block; height: 12px; border-radius: 4px; background: var(--host-line); }
+    .host-answer[hidden] { display: none; }
+    .host-composer { width: min(640px, 100%); min-height: 96px; border: 1px solid var(--host-composer-border); border-radius: 16px; background: var(--host-composer); padding: 16px; white-space: pre-wrap; line-height: 1.5; }
+    .host-composer:empty::before { content: "Reply…"; color: var(--host-muted); }
+    .host-composer.filled { outline: 2px solid var(--tot-gold); outline-offset: 2px; }
+    .demo.tot-open .host { filter: blur(var(--tot-backdrop-blur)); }
+    .restart {
+      position: absolute; z-index: 3; top: 12px; right: 12px; min-height: 36px; padding: 0 14px;
+      border: 1px solid var(--host-composer-border); border-radius: 18px; background: var(--host-composer); color: var(--host-text);
+      font: 600 13px var(--tot-font-ui); cursor: pointer;
+    }
+    .restart[hidden] { display: none; }
+    .demo-note { margin: 16px 0 0; font-size: 15px; color: var(--tot-muted); min-height: 1.5em; }
+
+    .tot-backdrop { position: absolute; inset: 0; z-index: 2; background: var(--tot-backdrop); display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .tot-backdrop[hidden] { display: none; }
+    .tot-popup { position: relative; width: min(var(--tot-popup-width), 100%); background: var(--tot-surface);
+      border: 1px solid var(--tot-border); border-radius: var(--tot-radius-popup); padding: var(--tot-popup-padding);
+      display: flex; flex-direction: column; gap: var(--tot-popup-gap); color: var(--tot-text); font-family: var(--tot-font-ui); font-weight: 400; }
+    .tot-history { max-height: 180px; overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 14px; padding-right: 6px; }
+    .tot-history-q { font-size: 14px; line-height: 1.4; color: var(--tot-text-muted); }
+    .tot-history-a { font-size: 14px; line-height: 1.45; color: var(--tot-text-muted); background: var(--tot-history-bg);
+      border: 1px solid var(--tot-history-border); border-radius: var(--tot-radius-field); padding: 12px; }
+    .tot-history-rule { height: 1px; background: var(--tot-history-border); flex-shrink: 0; }
+    .tot-history > * { flex-shrink: 0; }
+    .tot-question-row { display: flex; gap: 14px; align-items: flex-start; }
+    .tot-icon { width: var(--tot-icon-question); height: var(--tot-icon-question); flex-shrink: 0; }
+    .tot-icon .edge { stroke: var(--tot-icon-edge); }
+    .tot-question { margin: 0; font-family: var(--tot-font-brand); font-weight: 500; font-size: 22px; line-height: 1.35; }
+    .tot-field { width: 100%; height: 120px; resize: none; border: 1px solid var(--tot-field-border); border-radius: var(--tot-radius-field);
+      background: var(--tot-field-bg); color: var(--tot-text); padding: 12px; font: inherit; font-size: 15px; line-height: 1.45; }
+    .tot-field::placeholder { color: var(--tot-placeholder); }
+    .tot-field:focus-visible { outline: 2px solid var(--tot-text); outline-offset: 2px; }
+    .tot-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .tot-actions-right { display: flex; align-items: center; gap: 14px; }
+    .tot-hint { font-size: 13px; color: var(--tot-text-muted); }
+    .tot-skip { background: none; border: 0; padding: 0 4px; min-height: var(--tot-hit); font: inherit; font-size: 13px; color: var(--tot-text-muted); cursor: pointer; }
+    .tot-btn { min-height: var(--tot-hit); padding: 0 24px; border-radius: var(--tot-radius-pill); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+    .tot-btn-primary { background: var(--tot-primary-bg); color: var(--tot-primary-text); border: 0; }
+    .tot-btn-secondary { background: transparent; color: var(--tot-secondary-text); border: 1px solid var(--tot-secondary-border); }
+    .tot-btn:focus-visible, .tot-skip:focus-visible { outline: 2px solid var(--tot-text); outline-offset: 2px; }
+    .tot-popup[aria-busy="true"] button, .tot-popup[aria-busy="true"] .tot-field { pointer-events: none; }
+    .tot-trace { position: absolute; inset: -1px; width: calc(100% + 2px); height: calc(100% + 2px); overflow: visible; pointer-events: none; }
+    .tot-trace rect { fill: none; stroke: var(--tot-trace); stroke-width: 2; stroke-dasharray: var(--tot-trace-dash); animation: tot-trace var(--tot-trace-duration) linear infinite; }
+    @keyframes tot-trace { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -100; } }
+    .tot-confirm { width: min(400px, 100%); padding: 28px; gap: 24px; }
+    .tot-confirm h3 { margin: 0; font-family: var(--tot-font-brand); font-weight: 500; font-size: 20px; }
+    .tot-confirm-actions { display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .tot-trace rect { animation: none; stroke-dasharray: none; opacity: .5; }
+      .host { transition: none; }
+    }
+    @media (max-width: 760px) {
+      .host-side { display: none; }
+      .demo { height: 640px; }
+      .tot-popup { --tot-popup-padding: 22px; }
+      .tot-question { font-size: 19px; }
+      .tot-hint { display: none; }
+    }
+
+    /* ---------- Install ---------- */
+    .install { margin: 32px 0 0; padding: 0 0 0 1.25em; font-size: 17px; color: var(--tot-muted); }
+    .install li + li { margin-top: 8px; }
+    .install code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; color: var(--tot-charcoal); }
+    .install-cta { margin-top: 32px; }
+
+    footer { padding: 40px 16px 56px; border-top: 1px solid var(--tot-line); text-align: center; font-family: var(--tot-font-brand); font-weight: 500; color: var(--tot-muted); }
+    footer p { margin: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="stage" id="stage">
+      <div class="page">
+        <div class="header">
+          <div class="tile" role="img" aria-label="tot logo, a lit lightbulb">
+            <div class="bulbph" id="tb"></div>
+            <div class="bars bar1"></div>
+            <div class="bars bar2"></div>
+          </div>
+          <div class="htxt" id="ht">tot</div>
+        </div>
+        <h1>Get taught, not told.</h1>
+        <p class="lead">It’s easy to hand your thinking to AI. tot asks one quick question before the answer, so thinking first becomes a habit, one problem at a time.</p>
+        <!-- TODO: once tot is on the Chrome Web Store, point href at the listing,
+             drop the download attribute, and remove the install section below.
+             Until then, rebuild the zip after changing the extension:
+             npm run zip -w extension && cp extension/.output/tot-extension-*-chrome.zip landing/tot-extension.zip -->
+        <a class="cta" href="tot-extension.zip" download>Download tot</a>
+        <p class="foot">Free Chrome extension for Claude. No timers, no blocking.</p>
+        <a class="scroll-hint" href="#how">See how it works ↓</a>
+      </div>
+      <div class="overlay" aria-hidden="true"></div>
+      <div class="bigwrap" aria-hidden="true"><div class="big" id="bg">t<span class="spacer" id="sp"></span>t</div></div>
+      <div class="ball" id="ball" aria-hidden="true"><div class="bx"><div class="by"><div class="bsq"><div class="core"></div></div></div></div></div>
+      <button class="replay" id="replay" type="button">Replay</button>
+    </div>
+
+    <section id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <p class="eyebrow">How it works</p>
+        <h2 class="title" id="how-title">One question, then the answer.</h2>
+        <ol class="steps">
+          <li>
+            <h3>Ask Claude like you always do.</h3>
+            <p>Your message sends right away. tot never blocks Send or makes you wait to ask.</p>
+          </li>
+          <li>
+            <h3>Think first.</h3>
+            <p>If it looks like you’re handing over the thinking, tot holds the answer back and asks one question about how you’d start.</p>
+          </li>
+          <li>
+            <h3>Your thinking joins the chat.</h3>
+            <p>The answer appears, and tot puts your reasoning in Claude’s message box, asking it to check your approach and guide the next step. You decide whether to send it.</p>
+          </li>
+        </ol>
+        <p class="quiet"><strong>Most of the time, you won’t see tot at all.</strong> Already showed your work, asking what something means, or writing an email? tot stays out of the way. And Skip is always there.</p>
+      </div>
+    </section>
+
+    <section id="demo" aria-labelledby="demo-title">
+      <div class="wrap">
+        <div class="demo-head">
+          <div>
+            <p class="eyebrow">Try it</p>
+            <h2 class="title" id="demo-title">This is tot stepping in.</h2>
+            <p class="sub">A student asked Claude to solve an integral with no attempt. Type how you’d start, or try Skip. This demo doesn’t talk to Claude.</p>
+          </div>
+          <div class="theme-toggle" role="group" aria-label="Demo theme">
+            <button type="button" data-theme-btn="light" aria-pressed="true">Light</button>
+            <button type="button" data-theme-btn="dark" aria-pressed="false">Dark</button>
+          </div>
+        </div>
+
+        <div class="demo" id="demo-frame">
+          <div class="host" id="host">
+            <div class="host-side"></div>
+            <div class="host-main">
+              <div class="host-thread">
+                <div class="host-user">Solve this integral for me: ∫ 2x·cos(x²) dx</div>
+                <div class="host-answer" id="answer" hidden><i style="width:100%"></i><i style="width:92%"></i><i style="width:96%"></i><i style="width:70%"></i></div>
+              </div>
+              <div class="host-composer" id="composer" aria-label="Message"></div>
+            </div>
+          </div>
+          <div class="tot-backdrop" id="backdrop"></div>
+          <button type="button" class="restart" id="restart" hidden>Restart demo</button>
+        </div>
+        <p class="demo-note" id="demo-note" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section id="install" aria-labelledby="install-title">
+      <div class="wrap">
+        <p class="eyebrow">Install</p>
+        <h2 class="title" id="install-title">Set up in a minute.</h2>
+        <ol class="install">
+          <li>Download tot and unzip it.</li>
+          <li>Go to <code>chrome://extensions</code> and turn on Developer mode.</li>
+          <li>Click Load unpacked and choose the unzipped folder.</li>
+          <li>Open <code>claude.ai</code> and ask away.</li>
+        </ol>
+        <a class="cta install-cta" href="tot-extension.zip" download>Download tot</a>
+      </div>
+    </section>
+  </main>
+
+  <footer><p>tot · Get taught, not told.</p></footer>
+
+  <script>
+  /* ---------- Intro: measures real positions so the ball lands on the icon and the letters on the header ---------- */
+  (() => {
+    const $ = (id) => document.getElementById(id);
+    const stage = $('stage');
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function measure() {
+      const S = stage.getBoundingClientRect();
+      const rel = (el) => { const b = el.getBoundingClientRect(); return { x: b.left - S.left, y: b.top - S.top, w: b.width, h: b.height }; };
+      const sp = rel($('sp')), tb = rel($('tb')), ht = rel($('ht')), bg = rel($('bg'));
+      const sx = sp.x + sp.w / 2, sy = sp.y + sp.h / 2, D = sp.w;
+      const ex = tb.x + tb.w / 2, ey = tb.y + tb.h / 2;
+      const ball = $('ball');
+      Object.assign(ball.style, { left: (sx - D / 2) + 'px', top: (sy - D / 2) + 'px', width: D + 'px', height: D + 'px' });
+      ball.style.setProperty('--dx', (ex - sx) + 'px');
+      ball.style.setProperty('--dy', (ey - sy) + 'px');
+      ball.style.setProperty('--k', (tb.w / D).toFixed(4));
+      const big = $('bg');
+      big.style.setProperty('--gx', ((ht.x + ht.w / 2) - (bg.x + bg.w / 2)) + 'px');
+      big.style.setProperty('--gy', ((ht.y + ht.h / 2) - (bg.y + bg.h / 2)) + 'px');
+      big.style.setProperty('--gk', (ht.h / bg.h).toFixed(4));
+    }
+    function play() {
+      stage.classList.remove('run', 'done');
+      measure();
+      void stage.offsetWidth;          // restart CSS animations
+      stage.classList.add('run');
+    }
+    stage.querySelector('.overlay').addEventListener('animationend', (e) => {
+      if (e.animationName === 'flick') stage.classList.add('done');
+    });
+    $('replay').addEventListener('click', play);
+
+    if (reduce) stage.classList.add('done');
+    else (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => setTimeout(play, 60));
+  })();
+
+  /* ---------- Popup demo. Strings mirror tot-handoff/content/copy.json; follow-up text mirrors prompts/followup.md ---------- */
+  (() => {
+    const COPY = {
+      placeholder: 'Type your thinking', ariaField: 'Your thinking', submit: 'Submit', hint: 'or press Enter', skip: 'Skip',
+      confirmTitle: 'See the response now?', stay: 'Keep thinking', leave: 'Show answer',
+      history: 'Previous questions and answers'
+    };
+    const QUESTIONS = [
+      'Which integration technique would you try first, and what feature of the expression suggests it?',
+      'What would you substitute for u, and what does du become?'   // stand-in for the API's follow-up
+    ];
+    const ICON = '<svg class="tot-icon" viewBox="0 0 128 128" aria-hidden="true"><rect width="128" height="128" rx="30" fill="#2F4858"/><rect class="edge" x="2" y="2" width="124" height="124" rx="28" fill="none" stroke-width="4"/><circle cx="64" cy="54" r="30" fill="#F2B300"/><rect x="52" y="89" width="24" height="8" rx="3" fill="#FFFFFF"/><rect x="56" y="101" width="16" height="6" rx="3" fill="#FFFFFF"/></svg>';
+
+    const frame = document.getElementById('demo-frame');
+    const backdrop = document.getElementById('backdrop');
+    const host = document.getElementById('host');
+    const answerEl = document.getElementById('answer');
+    const composer = document.getElementById('composer');
+    const restartBtn = document.getElementById('restart');
+    const note = document.getElementById('demo-note');
+    const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    let state, round, answers, draft, openedAt, timer;
+    let interacted = false;   // don't steal focus from the page until the visitor uses the demo
+
+    function start() {
+      clearTimeout(timer);
+      state = 'question'; round = 0; answers = []; draft = ''; openedAt = Date.now();
+      answerEl.hidden = true; composer.textContent = ''; composer.classList.remove('filled');
+      restartBtn.hidden = true; note.textContent = '';
+      render();
+    }
+
+    function render() {
+      const open = state !== 'done';
+      backdrop.hidden = !open;
+      frame.classList.toggle('tot-open', open);
+      host.inert = open;
+      if (!open) { backdrop.innerHTML = ''; return; }
+
+      if (state === 'confirm') {
+        backdrop.innerHTML = `<div class="tot-popup tot-confirm" role="alertdialog" aria-labelledby="tot-confirm-title">
+          <h3 id="tot-confirm-title">${COPY.confirmTitle}</h3>
+          <div class="tot-confirm-actions">
+            <button type="button" class="tot-btn tot-btn-secondary" data-act="leave">${COPY.leave}</button>
+            <button type="button" class="tot-btn tot-btn-primary" data-act="stay">${COPY.stay}</button>
+          </div></div>`;
+        backdrop.querySelector('[data-act="stay"]').focus();   // nudge: Keep thinking is the default
+        return;
+      }
+
+      const busy = state === 'judging';
+      // column-reverse opens the history scrolled to the newest question, so DOM order is newest-first.
+      const history = answers.map((a, i) => `<div class="tot-history-rule"></div><div class="tot-history-a">${esc(a)}</div><div class="tot-history-q">${esc(QUESTIONS[i])}</div>`).reverse().join('');
+      const questionRow = `<div class="tot-question-row">${ICON}<h3 class="tot-question" id="tot-q">${esc(QUESTIONS[round])}</h3></div>`;
+      backdrop.innerHTML = `<div class="tot-popup" role="dialog" aria-labelledby="tot-q" aria-busy="${busy}">
+        ${busy ? '<svg class="tot-trace" aria-hidden="true"><rect x="0" y="0" width="100%" height="100%" rx="16" pathLength="100"/></svg>' : ''}
+        ${answers.length && !busy ? `<div class="tot-history" tabindex="0" aria-label="${COPY.history}">${questionRow}${history}</div>` : questionRow}
+        <textarea class="tot-field" aria-label="${COPY.ariaField}" placeholder="${COPY.placeholder}" ${busy ? 'disabled' : ''}>${esc(draft)}</textarea>
+        <div class="tot-actions">
+          <button type="button" class="tot-skip" data-act="skip" ${busy ? 'disabled' : ''}>${COPY.skip}</button>
+          <div class="tot-actions-right"><span class="tot-hint">${COPY.hint}</span>
+            <button type="button" class="tot-btn tot-btn-primary" data-act="submit" ${busy ? 'disabled' : ''}>${COPY.submit}</button></div>
+        </div></div>`;
+      const field = backdrop.querySelector('.tot-field');
+      field.addEventListener('input', () => { draft = field.value; });
+      field.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }   // Shift+Enter = new line
+      });
+      if (!busy && interacted) field.focus();
+    }
+
+    function submit() {
+      const text = draft.trim();
+      if (!text) return;
+      answers.push(text); draft = '';
+      state = 'judging'; render();
+      note.textContent = 'tot is checking your thinking…';
+      // Stand-in for the judge API: ask one follow-up, then finish. Respect the ~30 s cap.
+      timer = setTimeout(() => {
+        const capped = Date.now() - openedAt > 30000;
+        if (round === 0 && !capped) { round = 1; state = 'followup'; note.textContent = 'One more question.'; }
+        else finish(true);
+        render();
+      }, 1600);
+    }
+
+    function followupText() {
+      const strip = (s) => s.replace(/\.+$/, '');
+      let t = `My initial approach is: ${strip(answers[0])}.`;
+      for (let i = 1; i < answers.length; i++) t += ` When asked "${QUESTIONS[i]}", I added: ${strip(answers[i])}.`;
+      return t + ' Please assess whether this reasoning is on track, point out any misconception, and guide the next step without immediately restating the whole solution.';
+    }
+
+    function finish(paste) {
+      state = 'done';
+      answerEl.hidden = false;                       // reveal first
+      if (paste) {
+        composer.textContent = followupText();       // pasted, never sent
+        composer.classList.add('filled');
+        note.textContent = 'The answer is revealed, and your thinking is waiting in Claude’s message box. You press Send.';
+      } else {
+        note.textContent = 'The answer is revealed. Nothing was added to the chat.';
+      }
+      restartBtn.hidden = false;
+      restartBtn.focus();
+    }
+
+    backdrop.addEventListener('pointerdown', () => { interacted = true; });
+    backdrop.addEventListener('focusin', () => { interacted = true; });
+    backdrop.addEventListener('click', (e) => {
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if (act === 'submit') submit();
+      else if (act === 'skip') { state = 'confirm'; render(); }
+      else if (act === 'stay') { state = round ? 'followup' : 'question'; render(); }
+      else if (act === 'leave') { finish(false); render(); }
+    });
+    restartBtn.addEventListener('click', () => { interacted = true; start(); });
+
+    const buttons = document.querySelectorAll('[data-theme-btn]');
+    function setTheme(t) {
+      frame.dataset.theme = t;
+      buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeBtn === t)));
+    }
+    buttons.forEach((b) => b.addEventListener('click', () => setTheme(b.dataset.themeBtn)));
+    setTheme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+    start();
+  })();
+  </script>
+</body>
+</html>

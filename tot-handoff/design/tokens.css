@@ -1,0 +1,106 @@
+/* tot design tokens — light by default, dark via OS setting or data-theme="dark".
+   Fonts: https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;700&family=Figtree:wght@400;600&display=swap */
+
+:root {
+  /* Raw palette */
+  --tot-gold: #F2B300;
+  --tot-charcoal: #2F4858;
+  --tot-muted: #5E6E79;
+  --tot-line: #E3E8EB;
+  --tot-line-strong: #D5DCE1;
+  --tot-white: #FFFFFF;
+  --tot-night: #1C2830;
+  --tot-night-raised: #22313B;
+  --tot-night-line: #33434E;
+  --tot-night-line-strong: #3E5262;
+  --tot-mist: #E8EEF1;
+  --tot-mist-muted: #A9B7C0;
+  --tot-icon-edge-dark: #48616F;
+
+  /* Type */
+  --tot-font-brand: 'Quicksand', system-ui, sans-serif;
+  --tot-font-ui: 'Figtree', system-ui, sans-serif;
+  --tot-weight-wordmark: 700;
+  --tot-weight-headline: 400;
+  --tot-weight-question: 500;
+  --tot-weight-body: 400;
+  --tot-weight-button: 600;
+  --tot-size-question: 22px;
+  --tot-size-confirm-title: 20px;
+  --tot-size-field: 15px;
+  --tot-size-button: 15px;
+  --tot-size-small: 13px;
+
+  /* Shape and space */
+  --tot-popup-width: 540px;
+  --tot-popup-padding: 32px;
+  --tot-popup-gap: 20px;
+  --tot-radius-popup: 16px;
+  --tot-radius-field: 10px;
+  --tot-radius-pill: 22px;
+  --tot-hit: 44px;
+  --tot-icon-question: 32px;
+  --tot-backdrop-blur: 6px;
+
+  /* Motion */
+  --tot-trace-duration: 2.8s;
+  --tot-trace-dash: 12 88;
+
+  /* Semantic, light */
+  --tot-surface: var(--tot-white);
+  --tot-border: transparent;
+  --tot-text: var(--tot-charcoal);
+  --tot-text-muted: var(--tot-muted);
+  --tot-placeholder: var(--tot-muted);
+  --tot-field-bg: var(--tot-white);
+  --tot-field-border: var(--tot-line-strong);
+  --tot-history-bg: #F4F7F9;
+  --tot-history-border: var(--tot-line);
+  --tot-primary-bg: var(--tot-charcoal);
+  --tot-primary-text: var(--tot-white);
+  --tot-secondary-border: var(--tot-line-strong);
+  --tot-secondary-text: var(--tot-charcoal);
+  --tot-trace: var(--tot-charcoal);
+  --tot-icon-edge: transparent;
+  --tot-backdrop: rgba(20, 20, 20, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tot-surface: var(--tot-night);
+    --tot-border: var(--tot-night-line);
+    --tot-text: var(--tot-mist);
+    --tot-text-muted: var(--tot-mist-muted);
+    --tot-placeholder: #8C9BA5;
+    --tot-field-bg: var(--tot-night-raised);
+    --tot-field-border: var(--tot-night-line-strong);
+    --tot-history-bg: var(--tot-night-raised);
+    --tot-history-border: var(--tot-night-line);
+    --tot-primary-bg: var(--tot-gold);
+    --tot-primary-text: var(--tot-night);
+    --tot-secondary-border: var(--tot-night-line-strong);
+    --tot-secondary-text: var(--tot-mist);
+    --tot-trace: var(--tot-mist);
+    --tot-icon-edge: var(--tot-icon-edge-dark);
+    --tot-backdrop: rgba(0, 0, 0, 0.55);
+  }
+}
+
+:root[data-theme="dark"] {
+  --tot-surface: var(--tot-night);
+  --tot-border: var(--tot-night-line);
+  --tot-text: var(--tot-mist);
+  --tot-text-muted: var(--tot-mist-muted);
+  --tot-placeholder: #8C9BA5;
+  --tot-field-bg: var(--tot-night-raised);
+  --tot-field-border: var(--tot-night-line-strong);
+  --tot-history-bg: var(--tot-night-raised);
+  --tot-history-border: var(--tot-night-line);
+  --tot-primary-bg: var(--tot-gold);
+  --tot-primary-text: var(--tot-night);
+  --tot-secondary-border: var(--tot-night-line-strong);
+  --tot-secondary-text: var(--tot-mist);
+  --tot-trace: var(--tot-mist);
+  --tot-icon-edge: var(--tot-icon-edge-dark);
+  --tot-backdrop: rgba(0, 0, 0, 0.55);
+}

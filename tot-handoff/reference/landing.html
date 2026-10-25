@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tot — Get taught, not told.</title>
+<link rel="icon" href="../assets/icon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;700&family=Figtree:wght@400;600&display=swap">
+<style>
+/* Landing page with the "room flickers on" intro. Designed at 1440×900; scale or adapt for other sizes. */
+body { margin: 0; background: #FFFFFF; }
+.stage { position: relative; width: 100%; height: 100vh; min-height: 760px; overflow: hidden; background: #FFFFFF; font-family: 'Quicksand', system-ui, sans-serif; color: #2F4858; }
+.page { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding: 96px 16px 0; text-align: center; }
+.header { position: relative; z-index: 3; display: flex; align-items: center; gap: 28px; }
+.tile { position: relative; width: 112px; height: 112px; border-radius: 26px; background: #2F4858; }
+.bulbph { position: absolute; left: 30px; top: 21px; width: 52px; height: 52px; border-radius: 50%; }
+.bar1 { position: absolute; left: 45.5px; top: 78px; width: 21px; height: 7px; border-radius: 3px; background: #FFFFFF; }
+.bar2 { position: absolute; left: 49px; top: 88.5px; width: 14px; height: 5px; border-radius: 3px; background: #FFFFFF; }
+.htxt { font-size: 76px; font-weight: 700; line-height: 1; letter-spacing: -0.01em; }
+h1 { margin: 64px 0 0; font-size: clamp(48px, 7.2vw, 104px); font-weight: 400; line-height: 1.05; letter-spacing: -0.01em; }
+.lead { margin: 28px 0 0; max-width: 760px; font-family: 'Figtree', sans-serif; font-size: 26px; line-height: 1.5; color: #5E6E79; }
+.cta { margin-top: 44px; height: 72px; padding: 0 56px; border: 0; border-radius: 36px; background: #2F4858; color: #FFFFFF; font-family: 'Figtree', sans-serif; font-size: 26px; font-weight: 600; cursor: pointer; }
+.foot { margin-top: 18px; font-family: 'Figtree', sans-serif; font-size: 18px; color: #5E6E79; }
+.overlay { position: absolute; inset: 0; z-index: 2; background: #1C2830; }
+.bigwrap { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.big { font-size: 200px; font-weight: 700; line-height: 1; letter-spacing: -0.01em; color: #E8EEF1; white-space: nowrap; }
+.spacer { display: inline-block; vertical-align: baseline; width: 0.5em; height: 0.5em; margin: 0 0.035em; }
+.ball { position: absolute; z-index: 4; pointer-events: none; }
+.ball div { width: 100%; height: 100%; }
+.core { border-radius: 50%; background: #48616F; }
+.replay { position: absolute; z-index: 5; right: 24px; bottom: 24px; min-height: 44px; padding: 0 18px; border: 1px solid #E3E8EB; border-radius: 22px; background: #FFFFFF; color: #2F4858; font-family: 'Figtree', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; }
+
+/* Before the intro runs */
+.stage .big, .stage .ball, .stage .htxt, .stage .tile, .stage .bars, .stage .replay { opacity: 0; }
+
+@keyframes big{0%{opacity:0;transform:translate(0,0) scale(1)}4.7%,51.6%{opacity:1;transform:translate(0,0) scale(1);animation-timing-function:cubic-bezier(.6,0,.3,1)}62.5%{opacity:1}67.2%,100%{opacity:0;transform:translate(var(--gx),var(--gy)) scale(var(--gk))}}
+@keyframes btravel{0%,4.7%{opacity:0;transform:translate(0,0) scale(1)}6%{opacity:1;transform:translate(0,0) scale(1)}51.6%{opacity:1;transform:translate(0,0) scale(1);animation-timing-function:cubic-bezier(.6,0,.3,1)}67.2%,100%{opacity:1;transform:translate(var(--dx),var(--dy)) scale(var(--k))}}
+@keyframes bx{0%,4.7%{transform:translateX(-900px);animation-timing-function:cubic-bezier(.25,.55,.35,1)}45%,100%{transform:translateX(0)}}
+@keyframes by{0%,4.7%{transform:translateY(-300px);animation-timing-function:ease-in}14%{transform:translateY(0);animation-timing-function:ease-out}22.7%{transform:translateY(-160px);animation-timing-function:ease-in}29.8%{transform:translateY(0);animation-timing-function:ease-out}35.6%{transform:translateY(-66px);animation-timing-function:ease-in}39.8%{transform:translateY(0);animation-timing-function:ease-out}42.8%{transform:translateY(-16px);animation-timing-function:ease-in}45%,100%{transform:translateY(0)}}
+@keyframes bsq{0%,12.5%{transform:scale(1,1)}14%{transform:scale(1.2,0.78)}16.5%,28.3%{transform:scale(1,1)}29.8%{transform:scale(1.13,0.87)}32%,38.3%{transform:scale(1,1)}39.8%{transform:scale(1.06,0.94)}41.5%,100%{transform:scale(1,1)}}
+@keyframes blight{0%,70.3%{background:#48616F;box-shadow:0 0 0 0 rgba(242,179,0,0)}71%{background:#F2B300;box-shadow:0 0 18px 4px rgba(242,179,0,0.4)}72%{background:#55655E;box-shadow:0 0 0 0 rgba(242,179,0,0)}73.4%{background:#F2B300;box-shadow:0 0 22px 5px rgba(242,179,0,0.45)}74.5%{background:#B8901F;box-shadow:0 0 6px 0 rgba(242,179,0,0.2)}76%{background:#F2B300;box-shadow:0 0 40px 10px rgba(242,179,0,0.5)}90%,100%{background:#F2B300;box-shadow:0 0 0 0 rgba(242,179,0,0)}}
+@keyframes htxt{0%,62.5%{opacity:0;color:#E8EEF1}67.2%,80.4%{opacity:1;color:#E8EEF1}81.6%{color:#2F4858}83%{color:#E8EEF1}86%,100%{opacity:1;color:#2F4858}}
+@keyframes tile{0%,60.9%{opacity:0;transform:scale(0.85)}67.2%,100%{opacity:1;transform:scale(1)}}
+@keyframes bars{0%,65.6%{opacity:0}68.8%,100%{opacity:1}}
+@keyframes flick{0%,78%{opacity:1;visibility:visible}79.2%{opacity:0.3}80.4%{opacity:0.85}81.6%{opacity:0.12}83%{opacity:0.55}86%{opacity:0;visibility:visible}100%{opacity:0;visibility:hidden}}
+@keyframes rp{0%,96%{opacity:0}100%{opacity:1}}
+.run .big{animation:big 6.4s both}
+.run .ball{animation:btravel 6.4s both}
+.run .bx{animation:bx 6.4s both}
+.run .by{animation:by 6.4s both}
+.run .bsq{animation:bsq 6.4s both;transform-origin:50% 100%}
+.run .core{animation:blight 6.4s both}
+.run .htxt{animation:htxt 6.4s both}
+.run .tile{animation:tile 6.4s both}
+.run .bars{animation:bars 6.4s both}
+.run .overlay{animation:flick 6.4s both}
+.run .replay{animation:rp 6.4s both}
+
+@media (prefers-reduced-motion: reduce) {
+  .run * { animation: none !important; }
+  .stage .overlay, .stage .bigwrap, .stage .ball { display: none; }
+  .stage .htxt { opacity: 1; color: #2F4858; }
+  .stage .tile, .stage .bars, .stage .replay { opacity: 1; }
+  .stage .bulbph { background: #F2B300; }
+}
+</style>
+</head>
+<body>
+<main class="stage" id="stage">
+  <div class="page">
+    <div class="header">
+      <div class="tile" role="img" aria-label="tot">
+        <div class="bulbph" id="tb"></div>
+        <div class="bars bar1"></div>
+        <div class="bars bar2"></div>
+      </div>
+      <div class="htxt" id="ht">tot</div>
+    </div>
+    <h1>Get taught, not told.</h1>
+    <p class="lead">It’s easy to hand your thinking to AI. tot asks one quick question before the answer, so thinking first becomes a habit, one problem at a time.</p>
+    <button class="cta" type="button">Download tot</button>
+    <div class="foot">Free Chrome extension. No timers, no blocking.</div>
+  </div>
+  <div class="overlay" aria-hidden="true"></div>
+  <div class="bigwrap" aria-hidden="true"><div class="big" id="bg">t<span class="spacer" id="sp"></span>t</div></div>
+  <div class="ball" id="ball" aria-hidden="true"><div class="bx"><div class="by"><div class="bsq"><div class="core"></div></div></div></div></div>
+  <button class="replay" id="replay" type="button">Replay</button>
+</main>
+<script>
+// Measures real positions so the ball lands exactly on the icon and the big letters land on the header.
+const $ = (id) => document.getElementById(id);
+function measure() {
+  const S = $('stage').getBoundingClientRect();
+  const rel = (el) => { const b = el.getBoundingClientRect(); return { x: b.left - S.left, y: b.top - S.top, w: b.width, h: b.height }; };
+  const sp = rel($('sp')), tb = rel($('tb')), ht = rel($('ht')), bg = rel($('bg'));
+  const sx = sp.x + sp.w / 2, sy = sp.y + sp.h / 2, D = sp.w;
+  const ex = tb.x + tb.w / 2, ey = tb.y + tb.h / 2;
+  const ball = $('ball');
+  Object.assign(ball.style, { left: (sx - D / 2) + 'px', top: (sy - D / 2) + 'px', width: D + 'px', height: D + 'px' });
+  ball.style.setProperty('--dx', (ex - sx) + 'px');
+  ball.style.setProperty('--dy', (ey - sy) + 'px');
+  ball.style.setProperty('--k', (tb.w / D).toFixed(4));
+  const big = $('bg');
+  big.style.setProperty('--gx', ((ht.x + ht.w / 2) - (bg.x + bg.w / 2)) + 'px');
+  big.style.setProperty('--gy', ((ht.y + ht.h / 2) - (bg.y + bg.h / 2)) + 'px');
+  big.style.setProperty('--gk', (ht.h / bg.h).toFixed(4));
+}
+function play() {
+  const stage = $('stage');
+  stage.classList.remove('run');
+  measure();
+  void stage.offsetWidth;          // restart CSS animations
+  stage.classList.add('run');
+}
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(() => setTimeout(play, 60));
+$('replay').addEventListener('click', play);
+</script>
+</body>
+</html>

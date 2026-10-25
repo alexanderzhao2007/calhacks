@@ -11,6 +11,7 @@ import type {
   FollowUpRequest,
   FollowUpResponse,
 } from '@shared/contracts';
+import { localDay, STDB_DB, STDB_URI, TOKEN_KEY } from '../core/social';
 
 export type MockMode = 'live' | 'fast' | 'slow' | 'error';
 
@@ -90,6 +91,26 @@ async function postJson(path: string, body: unknown, deadlineMs: number): Promis
   }
 }
 
+export type ThoughtFirstMessage = { type: 'tot:thoughtFirst' };
+
+// Friends board (SpacetimeDB): one count per answered tot question. Only after the
+// student joins in the toolbar popup (the token exists then); sends no content,
+// never blocks anything, and drops failures.
+async function recordThoughtFirst(): Promise<void> {
+  const { [TOKEN_KEY]: token } = (await browser.storage.local.get(TOKEN_KEY)) as Record<string, string | undefined>;
+  if (!token) return;
+  try {
+    await fetch(`${STDB_URI}/v1/database/${STDB_DB}/call/record_thought_first`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify([localDay(new Date())]),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    // offline or server down: the board just misses this one
+  }
+}
+
 async function mockResult(mode: Exclude<MockMode, 'live'>, make: () => unknown): Promise<ApiResult> {
   await new Promise((r) => setTimeout(r, MOCK_DELAY_MS[mode]));
   if (mode === 'error') return { ok: false, error: 'mock error' };
@@ -97,7 +118,11 @@ async function mockResult(mode: Exclude<MockMode, 'live'>, make: () => unknown):
 }
 
 export default defineBackground(() => {
-  browser.runtime.onMessage.addListener((msg: ClassifyMessage | FollowUpMessage | ComposeMessage, _sender, sendResponse) => {
+  browser.runtime.onMessage.addListener((msg: ClassifyMessage | FollowUpMessage | ComposeMessage | ThoughtFirstMessage, _sender, sendResponse) => {
+    if (msg?.type === 'tot:thoughtFirst') {
+      void recordThoughtFirst();
+      return;
+    }
     if (msg?.type !== 'tot:classify' && msg?.type !== 'tot:followUp' && msg?.type !== 'tot:compose') return;
     void (async () => {
       const { mockMode = 'live' } = (await browser.storage.local.get('mockMode')) as {
