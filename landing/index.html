@@ -305,9 +305,8 @@
     }
 
     /* ---------- Demo video ---------- */
-    .video-frame { display: block; width: 100%; aspect-ratio: 16 / 9; margin-top: 40px; border: 0; border-radius: 20px; background: var(--tot-night); }
-    .video-placeholder { display: grid; place-items: center; }
-    .video-placeholder p { margin: 0; font-family: var(--tot-font-brand); font-size: clamp(18px, 2vw, 24px); color: var(--tot-mist); }
+    /* Loom embed; its wrapper keeps the video's own aspect ratio. */
+    .video-frame { margin-top: 40px; border-radius: 20px; overflow: hidden; background: var(--tot-night); }
 
     /* ---------- Friends ---------- */
     .miles { margin: 48px 0 0; }
@@ -362,13 +361,8 @@
       <div class="wrap">
         <p class="eyebrow">Demo</p>
         <h2 class="title" id="video-title">See tot in action.</h2>
-        <!-- TODO: replace the placeholder div with the demo video, e.g.
-             <video class="video-frame" src="tot-demo.mp4" controls playsinline preload="metadata"></video>
-             or a YouTube embed:
-             <iframe class="video-frame" src="https://www.youtube-nocookie.com/embed/VIDEO_ID"
-                     title="tot demo" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe> -->
-        <div class="video-frame video-placeholder">
-          <p>Demo video coming soon.</p>
+        <div class="video-frame">
+          <div style="position: relative; padding-bottom: 64.62829736211032%; height: 0;"><iframe src="https://www.loom.com/embed/3b97bc1d28994eca8da9f804f474202d" title="tot demo video" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
         </div>
       </div>
     </section>

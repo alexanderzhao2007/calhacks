@@ -59,6 +59,12 @@ export default defineContentScript({
   cssInjectionMode: 'ui', // tot.css goes into the shadow root, not the page
 
   async main(ctx) {
+    // A tab left open while the extension reloaded (e.g. `npm start` rebuilding)
+    // has no extension APIs; bail out instead of crashing on the first call.
+    if (!browser.runtime?.id) {
+      log('extension was reloaded; refresh this tab to use tot');
+      return;
+    }
     log('content script loaded', location.pathname);
     installCoverStyle();
     installPageStyle(UI_NAME);
