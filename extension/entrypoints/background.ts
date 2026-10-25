@@ -11,7 +11,8 @@ import type {
   FollowUpRequest,
   FollowUpResponse,
 } from '@shared/contracts';
-import { localDay, STDB_DB, STDB_URI, TOKEN_KEY } from '../core/social';
+import { callReducer } from '../core/friendsApi';
+import { localDay, TOKEN_KEY, type Tier } from '../core/social';
 
 export type MockMode = 'live' | 'fast' | 'slow' | 'error';
 
@@ -91,24 +92,47 @@ async function postJson(path: string, body: unknown, deadlineMs: number): Promis
   }
 }
 
-export type ThoughtFirstMessage = { type: 'tot:thoughtFirst' };
+// Friends board (SpacetimeDB) activity counts. Only after the student joins in
+// the toolbar popup (the token exists then). Sends counts and a tier, never
+// content; never blocks anything; failures are logged and dropped.
+export type ActivityMessage =
+  | { type: 'tot:prompt' }
+  | { type: 'tot:question' }
+  | { type: 'tot:thoughtFirst'; tier: Tier };
 
-// Friends board (SpacetimeDB): one count per answered tot question. Only after the
-// student joins in the toolbar popup (the token exists then); sends no content,
-// never blocks anything, and drops failures.
-async function recordThoughtFirst(): Promise<void> {
+const ACTIVITY_REDUCER = {
+  'tot:prompt': 'record_prompt',
+  'tot:question': 'record_question',
+  'tot:thoughtFirst': 'record_thought_first',
+} as const;
+
+async function storedToken(): Promise<string | undefined> {
   const { [TOKEN_KEY]: token } = (await browser.storage.local.get(TOKEN_KEY)) as Record<string, string | undefined>;
-  if (!token) return;
-  try {
-    await fetch(`${STDB_URI}/v1/database/${STDB_DB}/call/record_thought_first`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify([localDay(new Date())]),
-      signal: AbortSignal.timeout(5000),
-    });
-  } catch {
-    // offline or server down: the board just misses this one
+  return token;
+}
+
+async function recordActivity(msg: ActivityMessage): Promise<void> {
+  const reducer = ACTIVITY_REDUCER[msg.type];
+  const token = await storedToken();
+  if (!token) {
+    console.info(`[tot] friends: not joined, skipping ${reducer}`);
+    return;
   }
+  const args: unknown[] = [localDay(new Date())];
+  if (msg.type === 'tot:thoughtFirst') args.push(msg.tier);
+  try {
+    await callReducer(token, reducer, args);
+    console.info(`[tot] friends: ${reducer} recorded`);
+  } catch (e) {
+    console.info(`[tot] friends: ${reducer} failed:`, e instanceof Error ? e.message : e);
+  }
+}
+
+/** "Join" on the toolbar icon until the student opts in, so a silent no-op is visible. */
+async function updateJoinBadge(): Promise<void> {
+  const joined = Boolean(await storedToken());
+  await browser.action.setBadgeText({ text: joined ? '' : 'Join' });
+  if (!joined) await browser.action.setBadgeBackgroundColor({ color: '#F2B300' });
 }
 
 async function mockResult(mode: Exclude<MockMode, 'live'>, make: () => unknown): Promise<ApiResult> {
@@ -118,9 +142,14 @@ async function mockResult(mode: Exclude<MockMode, 'live'>, make: () => unknown):
 }
 
 export default defineBackground(() => {
-  browser.runtime.onMessage.addListener((msg: ClassifyMessage | FollowUpMessage | ComposeMessage | ThoughtFirstMessage, _sender, sendResponse) => {
-    if (msg?.type === 'tot:thoughtFirst') {
-      void recordThoughtFirst();
+  void updateJoinBadge();
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && TOKEN_KEY in changes) void updateJoinBadge();
+  });
+
+  browser.runtime.onMessage.addListener((msg: ClassifyMessage | FollowUpMessage | ComposeMessage | ActivityMessage, _sender, sendResponse) => {
+    if (msg?.type && msg.type in ACTIVITY_REDUCER) {
+      void recordActivity(msg as ActivityMessage);
       return;
     }
     if (msg?.type !== 'tot:classify' && msg?.type !== 'tot:followUp' && msg?.type !== 'tot:compose') return;

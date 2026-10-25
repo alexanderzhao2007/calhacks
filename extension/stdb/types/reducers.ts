@@ -6,15 +6,23 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
-import AddFriendReducer from "../add_friend_reducer";
+import CreateGroupReducer from "../create_group_reducer";
 import DeleteMeReducer from "../delete_me_reducer";
+import JoinGroupReducer from "../join_group_reducer";
+import LeaveGroupReducer from "../leave_group_reducer";
+import RecordPromptReducer from "../record_prompt_reducer";
+import RecordQuestionReducer from "../record_question_reducer";
 import RecordThoughtFirstReducer from "../record_thought_first_reducer";
-import RemoveFriendReducer from "../remove_friend_reducer";
+import SetGoalReducer from "../set_goal_reducer";
 import SetNameReducer from "../set_name_reducer";
 
-export type AddFriendParams = __Infer<typeof AddFriendReducer>;
+export type CreateGroupParams = __Infer<typeof CreateGroupReducer>;
 export type DeleteMeParams = __Infer<typeof DeleteMeReducer>;
+export type JoinGroupParams = __Infer<typeof JoinGroupReducer>;
+export type LeaveGroupParams = __Infer<typeof LeaveGroupReducer>;
+export type RecordPromptParams = __Infer<typeof RecordPromptReducer>;
+export type RecordQuestionParams = __Infer<typeof RecordQuestionReducer>;
 export type RecordThoughtFirstParams = __Infer<typeof RecordThoughtFirstReducer>;
-export type RemoveFriendParams = __Infer<typeof RemoveFriendReducer>;
+export type SetGoalParams = __Infer<typeof SetGoalReducer>;
 export type SetNameParams = __Infer<typeof SetNameReducer>;
 

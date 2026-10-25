@@ -26,6 +26,7 @@ export const ModelOutputSchema = z.object({
   decision: z.enum(['intervene', 'allow', 'uncertain']),
   mode: z.enum(['solve', 'brainstorm', 'none']),
   question: z.string(),
+  effort: z.boolean(),
 });
 export type ModelOutput = z.infer<typeof ModelOutputSchema>;
 
@@ -40,7 +41,7 @@ export function buildUserTurn(req: ClassifyRequest): string {
 }
 
 function failOpen(requestId: string, reason: string): ClassifyResponse {
-  return { requestId, decision: 'uncertain', reason, question: null, mode: 'none' };
+  return { requestId, decision: 'uncertain', reason, question: null, mode: 'none', effort: false };
 }
 
 // TOT_PROMPTS.md §5 post-processing. Never trust the model for these rules.
@@ -50,15 +51,17 @@ export function postProcess(requestId: string, raw: unknown): ClassifyResponse {
   const out = parsed.data;
 
   if (out.decision !== 'intervene') {
-    return { requestId, decision: out.decision, reason: 'model', question: null, mode: 'none' };
+    // effort earns the top miles tier, so it only stands next to allow.
+    const effort = out.decision === 'allow' && out.effort === true;
+    return { requestId, decision: out.decision, reason: 'model', question: null, mode: 'none', effort };
   }
 
   const mode: Exclude<Mode, 'none'> = out.mode === 'none' ? 'solve' : out.mode;
   const question = out.question.trim();
   if (question.length === 0 || question.length > MAX_QUESTION_CHARS) {
-    return { requestId, decision: 'intervene', reason: 'fallback_question', question: FALLBACK_QUESTIONS[mode], mode };
+    return { requestId, decision: 'intervene', reason: 'fallback_question', question: FALLBACK_QUESTIONS[mode], mode, effort: false };
   }
-  return { requestId, decision: 'intervene', reason: 'model', question, mode };
+  return { requestId, decision: 'intervene', reason: 'model', question, mode, effort: false };
 }
 
 export type ClassifierConfig = {

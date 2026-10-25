@@ -31,6 +31,7 @@ import {
 import { installPageStyle, setModal, uninstallPageStyle } from '../core/pageEffects';
 import { TurnCoordinator, chatIdFromPath, type Effect } from '../core/turnCoordinator';
 import { TotPopup, type ThanksStatus } from '../ui/TotPopup';
+import type { ActivityMessage } from './background';
 
 const DEADLINE_MS = 10000;
 const FOLLOW_UP_DEADLINE_MS = 4000; // judging an answer; failure hands off
@@ -39,6 +40,17 @@ const USER_CHECKED_ATTR = 'data-tot-checked';
 const UI_NAME = 'tot-panel'; // also the shadow host's tag, kept unblurred
 
 const log = (...args: unknown[]) => console.log('[tot]', ...args);
+
+/** Friends board count (no content). The background drops it unless the student joined. */
+function recordActivity(msg: ActivityMessage) {
+  // Throws synchronously once the extension reloads under an open tab; counting
+  // must never break the send or sidebar flow.
+  try {
+    browser.runtime.sendMessage(msg).catch(() => {});
+  } catch {
+    // extension context gone: reload the tab
+  }
+}
 
 export default defineContentScript({
   matches: ['https://claude.ai/*'],
@@ -116,6 +128,8 @@ export default defineContentScript({
             break;
           case 'openSidebar':
             openSidebar(fx.request);
+            // A new question, not a follow-up round. Counted only if joined.
+            if (!fx.request.history?.length) recordActivity({ type: 'tot:question' });
             break;
           case 'closeSidebar':
             if (panel.request?.turnId === fx.turnId) {
@@ -129,8 +143,9 @@ export default defineContentScript({
             break;
           case 'showThanks':
             setPanel({ judging: false, thanks: 'composing' });
-            // Counts toward the friends board if the student has joined; fire and forget.
-            browser.runtime.sendMessage({ type: 'tot:thoughtFirst' }).catch(() => {});
+            break;
+          case 'earnMiles':
+            recordActivity({ type: 'tot:thoughtFirst', tier: fx.tier });
             break;
           case 'composeFollowUp':
             void composeFollowUp(fx.turnId, fx.request);
@@ -248,6 +263,7 @@ export default defineContentScript({
         turnId,
         setTimeout(() => apply(coord.onDeadline(turnId)), DEADLINE_MS),
       );
+      recordActivity({ type: 'tot:prompt' });
       log('send', { turnId, source, chars: prompt.length });
       void classify(turnId, prompt, now);
     }

@@ -12,4 +12,5 @@ import {
 
 export default {
   day: __t.u32(),
+  tier: __t.u8(),
 };

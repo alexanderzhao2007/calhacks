@@ -14,6 +14,7 @@ type Fixture = {
   conversationContext?: ContextTurn[];
   decision: Decision;
   mode?: Mode;
+  effort?: boolean; // checked only when labeled
 };
 
 try {
@@ -46,10 +47,13 @@ for (const [i, f] of fixtures.entries()) {
     { client, systemPrompt, model, timeoutMs },
   );
   latencies.push(latencyMs);
-  const ok = res.decision === f.decision && (f.mode === undefined || res.mode === f.mode);
+  const ok =
+    res.decision === f.decision &&
+    (f.mode === undefined || res.mode === f.mode) &&
+    (f.effort === undefined || (res.effort ?? false) === f.effort);
   if (ok) passed++;
-  const got = `${res.decision}${res.mode && res.mode !== 'none' ? `/${res.mode}` : ''}`;
-  const want = `${f.decision}${f.mode && f.mode !== 'none' ? `/${f.mode}` : ''}`;
+  const got = `${res.decision}${res.mode && res.mode !== 'none' ? `/${res.mode}` : ''}${res.effort ? '+effort' : ''}`;
+  const want = `${f.decision}${f.mode && f.mode !== 'none' ? `/${f.mode}` : ''}${f.effort ? '+effort' : ''}`;
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${String(latencyMs).padStart(5)} ms  want ${want.padEnd(20)} got ${got.padEnd(20)} ${res.reason}`);
   console.log(`      ${f.prompt.slice(0, 90)}`);
   if (res.question) console.log(`      Q: ${res.question}`);

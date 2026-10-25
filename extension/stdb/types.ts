@@ -10,26 +10,42 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export const BoardCounts = __t.object("BoardCounts", {});
-export type BoardCounts = __Infer<typeof BoardCounts>;
-
 export const DailyCount = __t.object("DailyCount", {
   id: __t.u64(),
   owner: __t.identity(),
   day: __t.u32(),
-  count: __t.u32(),
+  prompts: __t.u32(),
+  questions: __t.u32(),
+  answers: __t.u32(),
+  miles: __t.u32(),
 });
 export type DailyCount = __Infer<typeof DailyCount>;
 
-export const FriendProfiles = __t.object("FriendProfiles", {});
-export type FriendProfiles = __Infer<typeof FriendProfiles>;
+export const GroupCounts = __t.object("GroupCounts", {});
+export type GroupCounts = __Infer<typeof GroupCounts>;
 
-export const Friendship = __t.object("Friendship", {
-  id: __t.u64(),
+export const GroupDay = __t.object("GroupDay", {
   owner: __t.identity(),
-  friend: __t.identity(),
+  day: __t.u32(),
+  answers: __t.u32(),
+  miles: __t.u32(),
 });
-export type Friendship = __Infer<typeof Friendship>;
+export type GroupDay = __Infer<typeof GroupDay>;
+
+export const GroupMember = __t.object("GroupMember", {
+  identity: __t.identity(),
+  groupId: __t.u64(),
+});
+export type GroupMember = __Infer<typeof GroupMember>;
+
+export const GroupMembers = __t.object("GroupMembers", {});
+export type GroupMembers = __Infer<typeof GroupMembers>;
+
+export const MyCounts = __t.object("MyCounts", {});
+export type MyCounts = __Infer<typeof MyCounts>;
+
+export const MyGroup = __t.object("MyGroup", {});
+export type MyGroup = __Infer<typeof MyGroup>;
 
 export const MyProfile = __t.object("MyProfile", {});
 export type MyProfile = __Infer<typeof MyProfile>;
@@ -37,7 +53,15 @@ export type MyProfile = __Infer<typeof MyProfile>;
 export const Profile = __t.object("Profile", {
   identity: __t.identity(),
   name: __t.string(),
-  friendCode: __t.string(),
 });
 export type Profile = __Infer<typeof Profile>;
+
+export const TrainGroup = __t.object("TrainGroup", {
+  id: __t.u64(),
+  name: __t.string(),
+  code: __t.string(),
+  weeklyGoal: __t.u32(),
+  createdBy: __t.identity(),
+});
+export type TrainGroup = __Infer<typeof TrainGroup>;
 

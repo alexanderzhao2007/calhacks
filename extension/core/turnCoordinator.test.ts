@@ -14,9 +14,9 @@ const followUp = (requestId: string, question: string) => ({
   ok: true as const,
   res: { requestId, decision: 'follow_up', reason: 'r', question },
 });
-const pass = (requestId: string) => ({
+const pass = (requestId: string, reason = 'model') => ({
   ok: true as const,
-  res: { requestId, decision: 'pass', reason: 'r', question: null },
+  res: { requestId, decision: 'pass', reason, question: null },
 });
 
 const composed = (requestId: string, message: string | null, decision: 'paste' | 'skip' | 'fallback' = 'paste') => ({
@@ -131,7 +131,7 @@ describe('sidebar outcomes', () => {
     const judge = c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'the x^2 part' });
     expect(judge[0]).toMatchObject({ type: 'judgeAnswer', request: { followUpsUsed: 1 } });
     const fx = c.onFollowUpResult('t1', pass('t1'));
-    expect(fx.map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp']);
+    expect(fx.map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp', 'earnMiles']);
     expect(fx[1]).toMatchObject({
       request: {
         mode: 'solve',
@@ -148,7 +148,7 @@ describe('sidebar outcomes', () => {
     let c = setup();
     c.onClassifyResult('t1', intervene('t1'));
     c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' });
-    expect(c.onFollowUpResult('t1', { ok: false, error: 'timeout' }).map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp']);
+    expect(c.onFollowUpResult('t1', { ok: false, error: 'timeout' }).map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp', 'earnMiles']);
 
     c = setup();
     c.onClassifyResult('t1', intervene('t1'));
@@ -158,20 +158,20 @@ describe('sidebar outcomes', () => {
     }
     expect(c.getTurn('t1')?.followUpsUsed).toBe(2);
     const fx = c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' });
-    expect(fx.map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp']); // no judgeAnswer
+    expect(fx.map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp', 'earnMiles']); // no judgeAnswer
   });
 
   it('asks no new question once 30 s have passed since the popup opened', () => {
     let c = setup();
     c.onClassifyResult('t1', intervene('t1'), 1_000);
     const fx = c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' }, 31_000);
-    expect(fx.map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp']);
+    expect(fx.map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp', 'earnMiles']);
 
     c = setup();
     c.onClassifyResult('t1', intervene('t1'), 1_000);
     c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' }, 29_000);
     const late = c.onFollowUpResult('t1', followUp('t1', 'q2'), 31_500); // judge finished past the window
-    expect(late.map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp']);
+    expect(late.map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp', 'earnMiles']);
   });
 
   it('skip while judging closes, reveals, and ignores the late judgment', () => {
@@ -277,5 +277,74 @@ describe('navigation', () => {
     expect(c.onUrlChange('/chat/other')).toEqual([{ type: 'revealAll', reason: 'navigation' }]);
     expect(c.getTurn('t1')).toBeUndefined();
     expect(c.onClassifyResult('t1', intervene('t1'))).toEqual([]);
+  });
+});
+
+describe('miles tiers', () => {
+  const tierOf = (fx: { type: string }[]) => fx.find((e) => e.type === 'earnMiles') as { tier: number } | undefined;
+
+  it('tier 3 only for allow with effort', () => {
+    let c = setup();
+    const fx = c.onClassifyResult('t1', { ok: true, res: { ...allow('t1').res, effort: true } });
+    expect(fx).toEqual([
+      { type: 'reveal', turnId: 't1', reason: 'allow' },
+      { type: 'earnMiles', turnId: 't1', tier: 3 },
+    ]);
+    c = setup();
+    expect(tierOf(c.onClassifyResult('t1', { ok: true, res: { ...allow('t1').res, effort: false } }))).toBeUndefined();
+    c = setup();
+    expect(tierOf(c.onClassifyResult('t1', { ok: true, res: { requestId: 't1', decision: 'uncertain', reason: 'r', question: null } }))).toBeUndefined();
+  });
+
+  it('tier 0 for a pass on the first answer, tier 1 after one follow-up', () => {
+    let c = setup();
+    c.onClassifyResult('t1', intervene('t1'));
+    c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'use the chain rule' });
+    expect(tierOf(c.onFollowUpResult('t1', pass('t1')))).toEqual(expect.objectContaining({ tier: 0 }));
+
+    c = setup();
+    c.onClassifyResult('t1', intervene('t1'));
+    c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' });
+    c.onFollowUpResult('t1', followUp('t1', 'q2'));
+    c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'the x^2 part' });
+    expect(tierOf(c.onFollowUpResult('t1', pass('t1')))).toEqual(expect.objectContaining({ tier: 1 }));
+  });
+
+  it('our failures never punish: judge error or refusal counts as a pass', () => {
+    let c = setup();
+    c.onClassifyResult('t1', intervene('t1'));
+    c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' });
+    expect(tierOf(c.onFollowUpResult('t1', { ok: false, error: 'timeout' }))).toEqual(expect.objectContaining({ tier: 0 }));
+
+    c = setup();
+    c.onClassifyResult('t1', intervene('t1'));
+    c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' });
+    expect(tierOf(c.onFollowUpResult('t1', pass('t1', 'refusal')))).toEqual(expect.objectContaining({ tier: 0 }));
+  });
+
+  it('tier 2 at the follow-up cap, the time window, or cap_reached', () => {
+    let c = setup();
+    c.onClassifyResult('t1', intervene('t1'));
+    for (const q of ['q2', 'q3']) {
+      c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' });
+      c.onFollowUpResult('t1', followUp('t1', q));
+    }
+    expect(tierOf(c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' }))).toEqual(expect.objectContaining({ tier: 2 }));
+
+    c = setup();
+    c.onClassifyResult('t1', intervene('t1'), 1_000);
+    c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' }, 29_000);
+    expect(tierOf(c.onFollowUpResult('t1', followUp('t1', 'q2'), 31_500))).toEqual(expect.objectContaining({ tier: 2 }));
+
+    c = setup();
+    c.onClassifyResult('t1', intervene('t1'));
+    c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' });
+    expect(tierOf(c.onFollowUpResult('t1', pass('t1', 'cap_reached')))).toEqual(expect.objectContaining({ tier: 2 }));
+  });
+
+  it('no miles on skip', () => {
+    const c = setup();
+    c.onClassifyResult('t1', intervene('t1'));
+    expect(tierOf(c.onSidebarResult({ action: 'skip', turnId: 't1' }))).toBeUndefined();
   });
 });

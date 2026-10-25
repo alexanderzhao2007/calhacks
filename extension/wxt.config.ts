@@ -12,6 +12,12 @@ export default defineConfig({
     chromiumArgs: [`--user-data-dir=${resolve(__dirname, '.chrome-profile')}`],
     startUrls: ['https://claude.ai/'],
   },
+  // The toolbar popup loads its code from this dev server during `npm run dev`.
+  // Not 3000: other local apps (e.g. Next.js) often hold it, and the popup then
+  // fetches their files and renders blank.
+  dev: {
+    server: { port: 3207 },
+  },
   alias: {
     '@shared': resolve(__dirname, '../shared'),
   },

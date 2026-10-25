@@ -50,29 +50,37 @@ describe('postProcess', () => {
   const valid = (r: ReturnType<typeof postProcess>) => expect(ClassifyResponseSchema.safeParse(r).success).toBe(true);
 
   it('passes a well-formed intervene through', () => {
-    const r = postProcess('r1', { decision: 'intervene', mode: 'solve', question: ' What are the two parts? ' });
-    expect(r).toMatchObject({ decision: 'intervene', mode: 'solve', question: 'What are the two parts?' });
+    const r = postProcess('r1', { decision: 'intervene', mode: 'solve', question: ' What are the two parts? ', effort: false });
+    expect(r).toMatchObject({ decision: 'intervene', mode: 'solve', question: 'What are the two parts?', effort: false });
     valid(r);
   });
 
   it('forces question null and mode none for allow/uncertain', () => {
-    const r = postProcess('r1', { decision: 'allow', mode: 'solve', question: 'leaked?' });
+    const r = postProcess('r1', { decision: 'allow', mode: 'solve', question: 'leaked?', effort: false });
     expect(r).toMatchObject({ decision: 'allow', mode: 'none', question: null });
     valid(r);
   });
 
   it('defaults mode to solve and fills empty or overlong questions', () => {
-    expect(postProcess('r1', { decision: 'intervene', mode: 'none', question: '' })).toMatchObject({
+    expect(postProcess('r1', { decision: 'intervene', mode: 'none', question: '', effort: false })).toMatchObject({
       mode: 'solve',
       question: FALLBACK_QUESTIONS.solve,
     });
-    const r = postProcess('r1', { decision: 'intervene', mode: 'brainstorm', question: 'q'.repeat(301) });
+    const r = postProcess('r1', { decision: 'intervene', mode: 'brainstorm', question: 'q'.repeat(301), effort: false });
     expect(r.question).toBe(FALLBACK_QUESTIONS.brainstorm);
     valid(r);
   });
 
+  it('keeps effort only next to allow', () => {
+    expect(postProcess('r1', { decision: 'allow', mode: 'none', question: '', effort: true }).effort).toBe(true);
+    expect(postProcess('r1', { decision: 'allow', mode: 'none', question: '', effort: false }).effort).toBe(false);
+    expect(postProcess('r1', { decision: 'uncertain', mode: 'none', question: '', effort: true }).effort).toBe(false);
+    expect(postProcess('r1', { decision: 'intervene', mode: 'solve', question: 'Q?', effort: true }).effort).toBe(false);
+    expect(postProcess('r1', { decision: 'allow', mode: 'none', question: '' }).effort).toBe(false); // invalid
+  });
+
   it('fails open on invalid output', () => {
-    for (const raw of [null, {}, { decision: 'block', mode: 'none', question: '' }]) {
+    for (const raw of [null, {}, { decision: 'block', mode: 'none', question: '', effort: false }]) {
       const r = postProcess('r1', raw);
       expect(r).toMatchObject({ decision: 'uncertain', question: null, reason: 'invalid_output' });
       valid(r);
@@ -87,9 +95,9 @@ describe('classify', () => {
 
   it('returns the post-processed model decision', async () => {
     const { res } = await run(
-      stub(async () => message({ parsed_output: { decision: 'intervene', mode: 'solve', question: 'Which rule?' } })),
+      stub(async () => message({ parsed_output: { decision: 'intervene', mode: 'solve', question: 'Which rule?', effort: false } })),
     );
-    expect(res).toMatchObject({ requestId: 'r1', decision: 'intervene', question: 'Which rule?' });
+    expect(res).toMatchObject({ requestId: 'r1', decision: 'intervene', question: 'Which rule?', effort: false });
   });
 
   it('fails open on refusal, timeout, and API errors', async () => {

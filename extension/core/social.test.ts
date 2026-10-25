@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { localDay, streak, weekTotal } from './social';
+import { conductor, localDay, streak, weekMiles, weekStart } from './social';
 
 describe('streak', () => {
   it('counts consecutive days ending today', () => {
@@ -14,15 +14,41 @@ describe('streak', () => {
   });
 });
 
-describe('weekTotal', () => {
-  it('sums the last 7 days including today', () => {
+describe('weekStart', () => {
+  it('is the Monday of the week', () => {
+    const monday = localDay(new Date(2026, 9, 19, 12)); // Mon 19 Oct 2026
+    for (let i = 0; i < 7; i++) expect(weekStart(monday + i)).toBe(monday);
+    expect(weekStart(monday - 1)).toBe(monday - 7); // Sunday belongs to the week before
+  });
+});
+
+describe('weekMiles', () => {
+  it('sums miles since Monday, ignoring future days', () => {
+    const monday = weekStart(20750);
     const rows = [
-      { day: 10, count: 2 },
-      { day: 4, count: 5 },
-      { day: 3, count: 100 }, // 8 days ago: outside the window
-      { day: 11, count: 9 }, // future (friend's time zone ahead): ignored
+      { owner: 'a', day: monday, miles: 10 },
+      { owner: 'b', day: monday + 2, miles: 6 },
+      { owner: 'a', day: monday - 1, miles: 100 }, // last Sunday: reset
+      { owner: 'b', day: monday + 3, miles: 50 }, // after "today"
     ];
-    expect(weekTotal(rows, 10)).toBe(7);
+    expect(weekMiles(rows, monday + 2)).toBe(16);
+  });
+});
+
+describe('conductor', () => {
+  const names: Record<string, string> = { a: 'Ann', b: 'Bo', c: 'Cy' };
+  const nameOf = (o: string) => names[o] ?? '';
+  it('picks the most miles today, ties by name', () => {
+    const rows = [
+      { owner: 'c', day: 5, miles: 12 },
+      { owner: 'b', day: 5, miles: 12 },
+      { owner: 'a', day: 4, miles: 300 }, // yesterday
+    ];
+    expect(conductor(rows, 5, nameOf)).toBe('b');
+  });
+  it('is nobody before anyone earns miles today', () => {
+    expect(conductor([{ owner: 'a', day: 4, miles: 10 }], 5, nameOf)).toBeNull();
+    expect(conductor([{ owner: 'a', day: 5, miles: 0 }], 5, nameOf)).toBeNull();
   });
 });
 

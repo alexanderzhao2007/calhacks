@@ -13,5 +13,4 @@ import {
 export default __t.row({
   identity: __t.identity().primaryKey(),
   name: __t.string(),
-  friendCode: __t.string().name("friend_code"),
 });

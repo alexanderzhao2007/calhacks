@@ -34,37 +34,57 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
-import AddFriendReducer from "./add_friend_reducer";
+import CreateGroupReducer from "./create_group_reducer";
 import DeleteMeReducer from "./delete_me_reducer";
+import JoinGroupReducer from "./join_group_reducer";
+import LeaveGroupReducer from "./leave_group_reducer";
+import RecordPromptReducer from "./record_prompt_reducer";
+import RecordQuestionReducer from "./record_question_reducer";
 import RecordThoughtFirstReducer from "./record_thought_first_reducer";
-import RemoveFriendReducer from "./remove_friend_reducer";
+import SetGoalReducer from "./set_goal_reducer";
 import SetNameReducer from "./set_name_reducer";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
-import BoardCountsRow from "./board_counts_table";
-import FriendProfilesRow from "./friend_profiles_table";
+import GroupCountsRow from "./group_counts_table";
+import GroupMembersRow from "./group_members_table";
+import MyCountsRow from "./my_counts_table";
+import MyGroupRow from "./my_group_table";
 import MyProfileRow from "./my_profile_table";
 
 /** Type-only namespace exports for generated type groups. */
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
-  boardCounts: __table({
-    name: 'board_counts',
+  groupCounts: __table({
+    name: 'group_counts',
     indexes: [
     ],
     constraints: [
     ],
-  }, BoardCountsRow),
-  friendProfiles: __table({
-    name: 'friend_profiles',
+  }, GroupCountsRow),
+  groupMembers: __table({
+    name: 'group_members',
     indexes: [
     ],
     constraints: [
     ],
-  }, FriendProfilesRow),
+  }, GroupMembersRow),
+  myCounts: __table({
+    name: 'my_counts',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyCountsRow),
+  myGroup: __table({
+    name: 'my_group',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyGroupRow),
   myProfile: __table({
     name: 'my_profile',
     indexes: [
@@ -76,10 +96,14 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
-  __reducerSchema("add_friend", AddFriendReducer),
+  __reducerSchema("create_group", CreateGroupReducer),
   __reducerSchema("delete_me", DeleteMeReducer),
+  __reducerSchema("join_group", JoinGroupReducer),
+  __reducerSchema("leave_group", LeaveGroupReducer),
+  __reducerSchema("record_prompt", RecordPromptReducer),
+  __reducerSchema("record_question", RecordQuestionReducer),
   __reducerSchema("record_thought_first", RecordThoughtFirstReducer),
-  __reducerSchema("remove_friend", RemoveFriendReducer),
+  __reducerSchema("set_goal", SetGoalReducer),
   __reducerSchema("set_name", SetNameReducer),
 );
 

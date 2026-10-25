@@ -40,6 +40,9 @@ export const ClassifyResponseSchema = z
     reason: z.string(),
     question: z.string().nullable(), // nonempty only if intervene
     mode: ModeSchema.optional(), // 'solve' | 'brainstorm' only if intervene
+    // In scope, and the current message itself shows the student's own attempt.
+    // Only ever true with 'allow'. Optional so older servers still validate.
+    effort: z.boolean().optional(),
   })
   .refine(
     (r) =>

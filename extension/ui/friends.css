@@ -1,4 +1,4 @@
-/* Toolbar popup (friends board). Tokens: tot-handoff design/tokens.css. */
+/* Toolbar popup (social train). Tokens: tot-handoff design/tokens.css. */
 
 @font-face { font-family: 'Figtree'; font-weight: 400; src: url('/fonts/figtree-latin-400-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Figtree'; font-weight: 600; src: url('/fonts/figtree-latin-600-normal.woff2') format('woff2'); }
@@ -92,25 +92,64 @@ body { background: var(--tot-surface); color: var(--tot-text); font: 400 14px/1.
 .tf-stats > div { display: flex; flex-direction: column; padding: 12px 14px; border-radius: 12px; background: var(--tot-raised); }
 .tf-big { font: 500 30px/1.1 var(--tot-font-brand); }
 
-.tf-board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.tf-board li {
-  display: grid; grid-template-columns: 20px 1fr auto 36px; align-items: center; gap: 10px;
-  padding: 9px 8px; border-bottom: 1px solid var(--tot-line-soft); border-radius: 8px;
-  transition: background-color 0.6s ease;
-}
-.tf-board li:last-child { border-bottom: 0; }
-.tf-board li.is-me { font-weight: 600; }
-.tf-board li.is-bumped { background: color-mix(in srgb, var(--tot-gold) 28%, transparent); transition: none; }
-.tf-rank { color: var(--tot-text-muted); font-size: 13px; }
-.tf-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tf-streak { color: var(--tot-text-muted); font-size: 13px; }
-.tf-week { text-align: right; font: 500 17px var(--tot-font-brand); }
+.tf-activity { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tf-activity th, .tf-activity td { padding: 5px 8px; text-align: right; border-bottom: 1px solid var(--tot-line-soft); }
+.tf-activity th[scope='row'] { text-align: left; font-weight: 500; color: var(--tot-text-muted); }
+.tf-activity thead th { font-weight: 600; color: var(--tot-text-muted); }
 
 .tf-code { flex: 1; padding: 8px 12px; border-radius: var(--tot-radius-field); background: var(--tot-raised); font: 600 17px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.16em; }
 
 .tf-leave { align-self: flex-start; min-height: 32px; padding: 0; border: 0; background: none; color: var(--tot-text-muted); font: 13px var(--tot-font-ui); cursor: pointer; text-decoration: underline; }
 .tf-leave:focus-visible { outline: 2px solid var(--tot-text); outline-offset: 2px; }
 
+/* Boarding form */
+.tf-tabs { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: var(--tot-radius-pill); background: var(--tot-raised); }
+.tf-tab { min-height: 34px; border: 0; border-radius: var(--tot-radius-pill); background: none; color: var(--tot-text-muted); font: 600 13px var(--tot-font-ui); cursor: pointer; }
+.tf-tab.is-on { background: var(--tot-surface); color: var(--tot-text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+.tf-chip { flex: 1; min-height: 34px; border: 1px solid var(--tot-secondary-border); border-radius: var(--tot-radius-pill); background: none; color: var(--tot-text); font: 600 13px var(--tot-font-ui); cursor: pointer; }
+.tf-chip.is-on { border-color: var(--tot-gold); background: color-mix(in srgb, var(--tot-gold) 22%, transparent); }
+.tf-tab:focus-visible, .tf-chip:focus-visible { outline: 2px solid var(--tot-text); outline-offset: 2px; }
+
+/* The train */
+.tf-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.tf-section h2.tf-group-name { font: 500 18px/1.2 var(--tot-font-brand); color: var(--tot-text); }
+.tf-track { position: relative; height: 64px; margin-top: 4px; }
+.tf-rail {
+  position: absolute; left: 0; right: 0; bottom: 8px; height: 6px; border-radius: 3px;
+  background: repeating-linear-gradient(90deg, var(--tot-line-strong) 0 6px, transparent 6px 12px);
+  border-bottom: 2px solid var(--tot-secondary-border);
+}
+.tf-station { position: absolute; right: 0; bottom: 14px; font-size: 26px; line-height: 1; }
+.tf-train {
+  position: absolute; bottom: 14px; display: flex; align-items: flex-end; gap: 3px;
+  /* progress 0: at the left edge. 1: nose touching the station (34px wide). */
+  left: calc(var(--progress) * (100% - 34px));
+  transform: translateX(calc(var(--progress) * -100%));
+  transition: left 1.2s cubic-bezier(0.3, 0.7, 0.2, 1), transform 1.2s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+.tf-car {
+  position: relative; display: grid; place-items: center; width: 24px; height: 22px; border-radius: 5px;
+  background: var(--tot-raised); border: 1px solid var(--tot-secondary-border); font: 600 12px var(--tot-font-ui);
+}
+.tf-car.is-me { background: color-mix(in srgb, var(--tot-gold) 35%, var(--tot-raised)); }
+.tf-hat { position: absolute; top: -17px; font-size: 15px; line-height: 1; }
+.tf-engine {
+  width: 34px; height: 28px; border-radius: 6px 12px 4px 4px; background: var(--tot-charcoal);
+  box-shadow: inset -9px 6px 0 -4px var(--tot-gold);
+}
+@media (prefers-color-scheme: dark) { .tf-engine { background: var(--tot-gold); box-shadow: inset -9px 6px 0 -4px var(--tot-night); } }
+.tf-train.is-moving { animation: tf-chug 0.35s ease-in-out 4; }
+@keyframes tf-chug { 50% { translate: 0 -2px; } }
+.tf-progress { margin: 0; font: 500 16px var(--tot-font-brand); }
+.tf-arrived {
+  margin: 0; padding: 10px 12px; border-radius: 12px; font-weight: 600;
+  background: color-mix(in srgb, var(--tot-gold) 25%, transparent); animation: tf-pop 0.6s ease-out;
+}
+.tf-track.is-arrived .tf-station { animation: tf-pop 0.6s ease-out 2; }
+@keyframes tf-pop { 0% { transform: scale(0.85); opacity: 0; } 60% { transform: scale(1.05); opacity: 1; } 100% { transform: none; } }
+.tf-links { justify-content: space-between; }
+
 @media (prefers-reduced-motion: reduce) {
-  .tf-board li { transition: none; }
+  .tf-train { transition: none; }
+  .tf-train.is-moving, .tf-arrived, .tf-track.is-arrived .tf-station { animation: none; }
 }

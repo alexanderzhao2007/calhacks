@@ -10,6 +10,12 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default {
-  friend: __t.identity(),
-};
+export default __t.row({
+  id: __t.u64().primaryKey(),
+  owner: __t.identity(),
+  day: __t.u32(),
+  prompts: __t.u32(),
+  questions: __t.u32(),
+  answers: __t.u32(),
+  miles: __t.u32(),
+});

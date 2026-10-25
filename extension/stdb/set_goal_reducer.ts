@@ -10,9 +10,6 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default __t.row({
-  id: __t.u64().primaryKey(),
-  owner: __t.identity(),
-  day: __t.u32(),
-  count: __t.u32(),
-});
+export default {
+  weeklyGoal: __t.u32(),
+};

@@ -15,6 +15,7 @@ import {
   type SidebarResult,
 } from '@shared/contracts';
 import { formatFollowUp } from './followUpText';
+import type { Tier } from './social';
 
 export type TurnPhase =
   | 'CLASSIFYING'
@@ -49,6 +50,7 @@ export type Effect =
   | { type: 'closeSidebar'; turnId: string }
   | { type: 'judgeAnswer'; turnId: string; request: FollowUpRequest }
   | { type: 'showThanks'; turnId: string }
+  | { type: 'earnMiles'; turnId: string; tier: Tier }
   | { type: 'composeFollowUp'; turnId: string; request: ComposeRequest }
   | { type: 'thanksReady'; turnId: string; willPaste: boolean }
   | { type: 'submitFollowUp'; turnId: string; text: string }
@@ -132,7 +134,12 @@ export class TurnCoordinator {
     if (!parsed.success || parsed.data.requestId !== turnId) return this.finish(turn, 'invalid');
 
     const res = parsed.data;
-    if (res.decision === 'allow') return this.finish(turn, 'allow');
+    if (res.decision === 'allow') {
+      // Thought first: the message already showed an attempt, so tot never asked.
+      // tot's own follow-ups never reach classification, so they can't earn this.
+      const fx = this.finish(turn, 'allow');
+      return res.effort ? [...fx, { type: 'earnMiles', turnId, tier: 3 }] : fx;
+    }
     if (res.decision === 'uncertain') return this.finish(turn, 'uncertain');
 
     turn.phase = 'INTERVENING';
@@ -169,7 +176,7 @@ export class TurnCoordinator {
 
     if (turn.phase !== 'INTERVENING') return []; // duplicate submit
     turn.qaHistory.push({ question: turn.currentQuestion, answer: result.answer.trim() });
-    if (this.outOfRounds(turn, now)) return this.handOff(turn); // no model call
+    if (this.outOfRounds(turn, now)) return this.handOff(turn, 2); // no model call; never shown real thinking
 
     turn.phase = 'JUDGING';
     return [
@@ -199,7 +206,10 @@ export class TurnCoordinator {
 
     const parsed = result.ok ? FollowUpResponseSchema.safeParse(result.res) : null;
     const res = parsed?.success && parsed.data.requestId === turnId ? parsed.data : null;
-    if (!res || res.decision === 'pass' || this.outOfRounds(turn, now)) return this.handOff(turn);
+    // Our failures (no valid result, refusal, …) count as a pass at this point.
+    if (!res) return this.handOff(turn, this.passTier(turn));
+    if (res.decision === 'pass') return this.handOff(turn, res.reason === 'cap_reached' ? 2 : this.passTier(turn));
+    if (this.outOfRounds(turn, now)) return this.handOff(turn, 2);
 
     turn.followUpsUsed += 1;
     turn.currentQuestion = res.question!;
@@ -236,6 +246,11 @@ export class TurnCoordinator {
 
     if (turn.thanksClosed) return this.placeFollowUp(turn);
     return [{ type: 'thanksReady', turnId, willPaste: turn.composedText !== null }];
+  }
+
+  /** Real thinking (or our failure): full miles on the first answer, fewer after a follow-up. */
+  private passTier(turn: Turn): Tier {
+    return turn.followUpsUsed === 0 ? 0 : 1;
   }
 
   /** Follow-up cap, or the round window since the popup opened has passed. */
@@ -322,7 +337,7 @@ export class TurnCoordinator {
    * The student's thinking is in: show the thanks screen and have /compose
    * write the message for Claude while it is up.
    */
-  private handOff(turn: Turn): Effect[] {
+  private handOff(turn: Turn, tier: Tier): Effect[] {
     turn.phase = 'THANKS';
     return [
       { type: 'showThanks', turnId: turn.turnId },
@@ -337,6 +352,7 @@ export class TurnCoordinator {
           qaHistory: turn.qaHistory.map((p) => ({ ...p })),
         },
       },
+      { type: 'earnMiles', turnId: turn.turnId, tier },
     ];
   }
 
