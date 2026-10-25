@@ -309,6 +309,16 @@
     .video-placeholder { display: grid; place-items: center; }
     .video-placeholder p { margin: 0; font-family: var(--tot-font-brand); font-size: clamp(18px, 2vw, 24px); color: var(--tot-mist); }
 
+    /* ---------- Friends ---------- */
+    .miles { margin: 48px 0 0; }
+    .miles-title { margin: 0; font-family: var(--tot-font-brand); font-weight: 500; font-size: 22px; }
+    .miles-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 16px 0 0; }
+    .miles-list div { display: flex; align-items: baseline; gap: 14px; padding: 14px 18px; border: 1px solid var(--tot-line); border-radius: 14px; }
+    .miles-list dt { flex-shrink: 0; min-width: 3.4em; font-family: var(--tot-font-brand); font-weight: 700; font-size: 20px; color: var(--tot-charcoal); }
+    .miles-list dt::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 50%; background: var(--tot-gold); vertical-align: 2px; }
+    .miles-list dd { margin: 0; font-size: 16px; color: var(--tot-muted); }
+    @media (max-width: 760px) { .miles-list { grid-template-columns: 1fr; } }
+
     /* ---------- Install ---------- */
     .install { margin: 32px 0 0; padding: 0 0 0 1.25em; font-size: 17px; color: var(--tot-muted); }
     .install li + li { margin-top: 8px; }
@@ -414,6 +424,40 @@
           <button type="button" class="restart" id="restart" hidden>Restart demo</button>
         </div>
         <p class="demo-note" id="demo-note" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section id="friends" aria-labelledby="friends-title">
+      <div class="wrap">
+        <p class="eyebrow">Think with friends</p>
+        <h2 class="title" id="friends-title">Ride one train together.</h2>
+        <p class="sub">Habits stick better with friends. Your group shares one train, and every time someone thinks first, it moves closer to the station.</p>
+        <ol class="steps">
+          <li>
+            <h3>Start a group or join one.</h3>
+            <p>Click the tot icon in Chrome, start a group, and share its 6-character code. Friends join with the code. Up to 8 people per train, or go solo.</p>
+          </li>
+          <li>
+            <h3>Earn miles by thinking first.</h3>
+            <p>Every time you show your own thinking on Claude, your group’s train moves forward. Better thinking goes further. Wrong guesses still count.</p>
+          </li>
+          <li>
+            <h3>Reach your weekly goal.</h3>
+            <p>Pick a goal together, like 250 miles. Hit it and the train pulls into the station. A fresh track starts every Monday.</p>
+          </li>
+        </ol>
+
+        <div class="miles">
+          <h3 class="miles-title">How you earn miles</h3>
+          <dl class="miles-list">
+            <div><dt>12 mi</dt><dd>Your message already showed your attempt, so tot didn’t need to ask</dd></div>
+            <div><dt>10 mi</dt><dd>Real thinking on your first answer</dd></div>
+            <div><dt>6 mi</dt><dd>Real thinking after one follow-up question</dd></div>
+            <div><dt>1 mi</dt><dd>You answered, even if it was a start</dd></div>
+          </dl>
+        </div>
+
+        <p class="quiet"><strong>Whoever earns the most miles today is the conductor 🎩.</strong> There’s no full leaderboard, and skips are never counted. Your group sees your name and miles, never what you ask Claude.</p>
       </div>
     </section>
 
