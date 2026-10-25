@@ -3,7 +3,7 @@
 // goal, and it resets every Monday. Or ride solo with your own goal.
 //
 // Flow: Home → About you → (Start your train → Invite | Climb aboard | Solo
-// goal) → Train → Arrival once a week. Shows only you and your group (enforced
+// goal) → Train → Arrival each time a goal is reached. Shows only you and your group (enforced
 // by the module's views); skips are never counted.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -768,7 +768,8 @@ function TrainView({
     data.mine.filter((d) => d.answers > 0).map((d) => d.day),
     today,
   );
-  const arrivalKey = `${data.group ? `g${data.group.id}` : 'solo'}:${weekStart(today)}`;
+  // One arrival per goal reached: raising the goal mid-week earns another.
+  const arrivalKey = `${data.group ? `g${data.group.id}` : 'solo'}:${weekStart(today)}:${goal}`;
 
   // The train glides (~1 s) to its new spot when miles change.
   const [s, setS] = useState(target);
@@ -809,7 +810,7 @@ function TrainView({
     if (gained > 0) setToast((t) => ({ n: gained, id: (t?.id ?? 0) + 1 }));
   }, [me.today]);
 
-  // Arrival plays once per week, when the train reaches the station.
+  // Arrival plays each time the train reaches the station for a new goal.
   const atStation = target >= TRACK_LENGTH - 0.5 && s >= TRACK_LENGTH - 0.5;
   useEffect(() => {
     if (screen !== 'train' || !atStation) return;
@@ -1000,7 +1001,7 @@ function TrainMenu({
   );
 }
 
-/** The once-a-week arrival timeline (CSS keyframes in train.css). Replay restarts it. */
+/** The arrival timeline (CSS keyframes in train.css). Replay restarts it. */
 function Arrival({
   title,
   goal,
