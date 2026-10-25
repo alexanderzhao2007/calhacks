@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tot popup — reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;700&family=Figtree:wght@400;600&display=swap">
+<link rel="stylesheet" href="../design/tokens.css">
+<style>
+  /* ---------- Demo chrome (not part of tot) ---------- */
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--tot-font-ui); }
+  .demo-bar { position: fixed; top: 12px; right: 12px; z-index: 2147483647; display: flex; gap: 6px; flex-wrap: wrap;
+    background: #fff; border: 1px solid #ddd; border-radius: 22px; padding: 4px; font: 13px system-ui, sans-serif; }
+  .demo-bar button { border: 0; background: transparent; padding: 0 12px; min-height: 32px; border-radius: 16px; cursor: pointer; color: #333; font: inherit; }
+  .demo-bar button[aria-pressed="true"] { background: #2F4858; color: #fff; }
+
+  /* Stand-in for Claude's page. Neutral on purpose: tot does not style the host. */
+  .host { position: fixed; inset: 0; display: flex; background: #F4F4F4; color: #1A1A1A; font: 15px system-ui, sans-serif; transition: filter .2s; }
+  .host-side { width: 220px; background: #E4E4E4; }
+  .host-main { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 48px 16px 24px; min-width: 0; }
+  .host-thread { width: min(680px, 100%); flex: 1; display: flex; flex-direction: column; gap: 24px; }
+  .host-user { align-self: flex-end; background: #E0E0E0; border-radius: 12px; padding: 12px 16px; }
+  .host-answer { display: flex; flex-direction: column; gap: 12px; }
+  .host-answer i { display: block; height: 12px; border-radius: 4px; background: #D2D2D2; }
+  .host-answer[hidden] { display: none; }
+  .host-composer { width: min(680px, 100%); min-height: 96px; border: 1px solid #BDBDBD; border-radius: 16px; background: #fff; padding: 16px; white-space: pre-wrap; line-height: 1.5; }
+  .host-composer:empty::before { content: "Reply…"; color: #6B6B6B; }
+  :root[data-theme="dark"] .host { background: #212121; color: #ECECEC; }
+  :root[data-theme="dark"] .host-side { background: #171717; }
+  :root[data-theme="dark"] .host-user { background: #2F2F2F; }
+  :root[data-theme="dark"] .host-answer i { background: #3A3A3A; }
+  :root[data-theme="dark"] .host-composer { background: #2A2A2A; border-color: #3A3A3A; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .host { background: #212121; color: #ECECEC; }
+    :root:not([data-theme="light"]) .host-side { background: #171717; }
+    :root:not([data-theme="light"]) .host-user { background: #2F2F2F; }
+    :root:not([data-theme="light"]) .host-answer i { background: #3A3A3A; }
+    :root:not([data-theme="light"]) .host-composer { background: #2A2A2A; border-color: #3A3A3A; }
+  }
+  body.tot-open .host { filter: blur(var(--tot-backdrop-blur)); }
+
+  /* ---------- tot ---------- */
+  .tot-backdrop { position: fixed; inset: 0; z-index: 2147483000; background: var(--tot-backdrop);
+    display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .tot-backdrop[hidden] { display: none; }
+
+  .tot-popup { position: relative; width: min(var(--tot-popup-width), 100%); background: var(--tot-surface);
+    border: 1px solid var(--tot-border); border-radius: var(--tot-radius-popup); padding: var(--tot-popup-padding);
+    display: flex; flex-direction: column; gap: var(--tot-popup-gap); color: var(--tot-text);
+    font-family: var(--tot-font-ui); font-weight: var(--tot-weight-body); }
+
+  .tot-history { max-height: 180px; overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 14px; padding-right: 6px; }
+  .tot-history-q { font-size: 14px; line-height: 1.4; color: var(--tot-text-muted); }
+  .tot-history-a { font-size: 14px; line-height: 1.45; color: var(--tot-text-muted); background: var(--tot-history-bg);
+    border: 1px solid var(--tot-history-border); border-radius: var(--tot-radius-field); padding: 12px; }
+  .tot-history-rule { height: 1px; background: var(--tot-history-border); flex-shrink: 0; }
+  .tot-history > * { flex-shrink: 0; }
+
+  .tot-question-row { display: flex; gap: 14px; align-items: flex-start; }
+  .tot-icon { width: var(--tot-icon-question); height: var(--tot-icon-question); flex-shrink: 0; }
+  .tot-icon .edge { stroke: var(--tot-icon-edge); }
+  .tot-question { margin: 0; font-family: var(--tot-font-brand); font-weight: var(--tot-weight-question);
+    font-size: var(--tot-size-question); line-height: 1.35; }
+
+  .tot-field { width: 100%; height: 120px; resize: none; border: 1px solid var(--tot-field-border); border-radius: var(--tot-radius-field);
+    background: var(--tot-field-bg); color: var(--tot-text); padding: 12px; font: inherit; font-size: var(--tot-size-field); line-height: 1.45; }
+  .tot-field::placeholder { color: var(--tot-placeholder); }
+  .tot-field:focus-visible { outline: 2px solid var(--tot-text); outline-offset: 2px; }
+
+  .tot-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .tot-actions-right { display: flex; align-items: center; gap: 14px; }
+  .tot-hint { font-size: var(--tot-size-small); color: var(--tot-text-muted); }
+  .tot-skip { background: none; border: 0; padding: 0 4px; min-height: var(--tot-hit); font: inherit; font-size: var(--tot-size-small);
+    color: var(--tot-text-muted); cursor: pointer; }
+  .tot-btn { min-height: var(--tot-hit); padding: 0 24px; border-radius: var(--tot-radius-pill); font: inherit;
+    font-size: var(--tot-size-button); font-weight: var(--tot-weight-button); cursor: pointer; }
+  .tot-btn-primary { background: var(--tot-primary-bg); color: var(--tot-primary-text); border: 0; }
+  .tot-btn-secondary { background: transparent; color: var(--tot-secondary-text); border: 1px solid var(--tot-secondary-border); }
+  .tot-btn:focus-visible, .tot-skip:focus-visible { outline: 2px solid var(--tot-text); outline-offset: 2px; }
+  .tot-popup[aria-busy="true"] button, .tot-popup[aria-busy="true"] .tot-field { pointer-events: none; }
+
+  /* Judging trace */
+  .tot-trace { position: absolute; inset: -1px; width: calc(100% + 2px); height: calc(100% + 2px); overflow: visible; pointer-events: none; }
+  .tot-trace rect { fill: none; stroke: var(--tot-trace); stroke-width: 2; stroke-dasharray: var(--tot-trace-dash);
+    animation: tot-trace var(--tot-trace-duration) linear infinite; }
+  @keyframes tot-trace { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -100; } }
+
+  /* Skip confirm */
+  .tot-confirm { width: min(400px, 100%); padding: 28px; gap: 24px; }
+  .tot-confirm h2 { margin: 0; font-family: var(--tot-font-brand); font-weight: var(--tot-weight-question); font-size: var(--tot-size-confirm-title); }
+  .tot-confirm-actions { display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tot-trace rect { animation: none; stroke-dasharray: none; opacity: .5; }
+    .host { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-bar" role="toolbar" aria-label="Reference controls">
+  <button type="button" data-theme-btn="auto" aria-pressed="true">Auto</button>
+  <button type="button" data-theme-btn="light" aria-pressed="false">Light</button>
+  <button type="button" data-theme-btn="dark" aria-pressed="false">Dark</button>
+  <button type="button" id="restart">Restart</button>
+</div>
+
+<div class="host" aria-hidden="false" id="host">
+  <div class="host-side"></div>
+  <div class="host-main">
+    <div class="host-thread">
+      <div class="host-user">Solve this integral for me.</div>
+      <div class="host-answer" id="answer" hidden><i style="width:100%"></i><i style="width:92%"></i><i style="width:96%"></i><i style="width:70%"></i></div>
+    </div>
+    <div class="host-composer" id="composer" contenteditable="true" aria-label="Message"></div>
+  </div>
+</div>
+
+<div class="tot-backdrop" id="backdrop">
+  <!-- Popup is rendered here by render() -->
+</div>
+
+<script>
+/* Reference behavior. Strings mirror content/copy.json; the follow-up text mirrors prompts/followup.md. */
+const COPY = {
+  placeholder: 'Type your thinking', ariaField: 'Your thinking', submit: 'Submit', hint: 'or press Enter', skip: 'Skip',
+  confirmTitle: 'See the response now?', stay: 'Keep thinking', leave: 'Show answer',
+  history: 'Previous questions and answers'
+};
+const QUESTIONS = [
+  'Which integration technique would you try first, and what feature of the expression suggests it?',
+  'What would you substitute for u, and what does du become?'   // stand-in for the API's follow-up
+];
+const ICON = '<svg class="tot-icon" viewBox="0 0 128 128" role="img" aria-label="tot"><rect width="128" height="128" rx="30" fill="#2F4858"/><rect class="edge" x="2" y="2" width="124" height="124" rx="28" fill="none" stroke-width="4"/><circle cx="64" cy="54" r="30" fill="#F2B300"/><rect x="52" y="89" width="24" height="8" rx="3" fill="#FFFFFF"/><rect x="56" y="101" width="16" height="6" rx="3" fill="#FFFFFF"/></svg>';
+
+let state, round, answers, draft, openedAt;
+const backdrop = document.getElementById('backdrop');
+const answerEl = document.getElementById('answer');
+const composer = document.getElementById('composer');
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function start() {
+  state = 'question'; round = 0; answers = []; draft = ''; openedAt = Date.now();
+  answerEl.hidden = true; composer.textContent = '';
+  render();
+}
+
+function render() {
+  const open = state !== 'done';
+  backdrop.hidden = !open;
+  document.body.classList.toggle('tot-open', open);
+  document.getElementById('host').setAttribute('aria-hidden', String(open));
+  if (!open) { backdrop.innerHTML = ''; return; }
+
+  if (state === 'confirm') {
+    backdrop.innerHTML = `<div class="tot-popup tot-confirm" role="alertdialog" aria-modal="true" aria-labelledby="tot-confirm-title">
+      <h2 id="tot-confirm-title">${COPY.confirmTitle}</h2>
+      <div class="tot-confirm-actions">
+        <button type="button" class="tot-btn tot-btn-secondary" data-act="leave">${COPY.leave}</button>
+        <button type="button" class="tot-btn tot-btn-primary" data-act="stay">${COPY.stay}</button>
+      </div></div>`;
+    backdrop.querySelector('[data-act="stay"]').focus();   // nudge: Keep thinking is the default
+    return;
+  }
+
+  const busy = state === 'judging';
+  // The history box uses column-reverse so it opens scrolled to the newest question:
+  // DOM order is newest-first, bottom-to-top (rule, answer, question for each earlier round).
+  const history = answers.map((a, i) => `<div class="tot-history-rule"></div><div class="tot-history-a">${esc(a)}</div><div class="tot-history-q">${esc(QUESTIONS[i])}</div>`).reverse().join('');
+  const questionRow = `<div class="tot-question-row">${ICON}<h2 class="tot-question" id="tot-q">${esc(QUESTIONS[round])}</h2></div>`;
+  backdrop.innerHTML = `<div class="tot-popup" role="dialog" aria-modal="true" aria-labelledby="tot-q" aria-busy="${busy}">
+    ${busy ? '<svg class="tot-trace" aria-hidden="true"><rect x="0" y="0" width="100%" height="100%" rx="16" pathLength="100"/></svg>' : ''}
+    ${answers.length && !busy ? `<div class="tot-history" tabindex="0" aria-label="${COPY.history}">${questionRow}${history}</div>` : questionRow}
+    <textarea class="tot-field" aria-label="${COPY.ariaField}" placeholder="${COPY.placeholder}" ${busy ? 'disabled' : ''}>${esc(draft)}</textarea>
+    <div class="tot-actions">
+      <button type="button" class="tot-skip" data-act="skip" ${busy ? 'disabled' : ''}>${COPY.skip}</button>
+      <div class="tot-actions-right"><span class="tot-hint">${COPY.hint}</span>
+        <button type="button" class="tot-btn tot-btn-primary" data-act="submit" ${busy ? 'disabled' : ''}>${COPY.submit}</button></div>
+    </div></div>`;
+  const field = backdrop.querySelector('.tot-field');
+  field.addEventListener('input', () => { draft = field.value; });
+  field.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }   // Shift+Enter = new line
+  });
+  if (!busy) field.focus();
+}
+
+function submit() {
+  const text = draft.trim();
+  if (!text) return;
+  answers.push(text); draft = '';
+  state = 'judging'; render();
+  // Stand-in for the judge API: ask one follow-up, then finish. Respect the ~30 s cap.
+  setTimeout(() => {
+    const capped = Date.now() - openedAt > 30000;
+    if (round === 0 && !capped) { round = 1; state = 'followup'; }
+    else finish(true);
+    render();
+  }, 1600);
+}
+
+function followupText() {
+  const strip = (s) => s.replace(/\.+$/, '');
+  let t = `My initial approach is: ${strip(answers[0])}.`;
+  for (let i = 1; i < answers.length; i++) t += ` When asked "${QUESTIONS[i]}", I added: ${strip(answers[i])}.`;
+  return t + ' Please assess whether this reasoning is on track, point out any misconception, and guide the next step without immediately restating the whole solution.';
+}
+
+function finish(paste) {
+  state = 'done';
+  answerEl.hidden = false;                       // reveal first
+  if (paste) {
+    const existing = composer.textContent.trim();
+    composer.textContent = followupText() + (existing ? '\n\n' + existing : '');   // above any draft; never sent
+  }
+}
+
+backdrop.addEventListener('click', (e) => {
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'submit') submit();
+  else if (act === 'skip') { state = 'confirm'; render(); }
+  else if (act === 'stay') { state = round ? 'followup' : 'question'; render(); }
+  else if (act === 'leave') { finish(false); render(); }
+});
+
+document.querySelectorAll('[data-theme-btn]').forEach((b) => b.addEventListener('click', () => {
+  const t = b.dataset.themeBtn;
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+  document.querySelectorAll('[data-theme-btn]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+}));
+document.getElementById('restart').addEventListener('click', start);
+start();
+</script>
+</body>
+</html>
