@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>tot: get taught, not told</title>
+  <title>tot</title>
   <meta name="description" content="tot is a free Chrome extension that asks you one quick question before AI does the thinking for you.">
   <meta name="color-scheme" content="light">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 128 128'%3E%3Crect width='128' height='128' rx='30' fill='%232F4858'/%3E%3Ccircle cx='64' cy='54' r='30' fill='%23F2B300'/%3E%3Crect x='52' y='89' width='24' height='8' rx='3' fill='%23FFFFFF'/%3E%3C/svg%3E">
@@ -90,6 +90,10 @@
     .cta:focus { outline: none; }
     .cta:focus-visible { outline: 3px solid var(--tot-charcoal); outline-offset: 4px; }
     .foot { margin: 18px 0 0; font-family: var(--tot-font-ui); font-size: clamp(15px, 1.4vw, 18px); color: var(--tot-muted); }
+    .cta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 44px; }
+    .cta-row .cta { margin-top: 0; }
+    .cta-secondary { background: transparent; color: var(--tot-charcoal); box-shadow: inset 0 0 0 2px var(--tot-charcoal); }
+    .cta-secondary:hover { background: color-mix(in srgb, var(--tot-charcoal) 8%, transparent); }
     .scroll-hint { margin-top: 28px; font-family: var(--tot-font-ui); font-size: 15px; color: var(--tot-muted); text-decoration: none; }
     .scroll-hint:hover { color: var(--tot-charcoal); }
 
@@ -300,6 +304,11 @@
       .tot-hint { display: none; }
     }
 
+    /* ---------- Demo video ---------- */
+    .video-frame { display: block; width: 100%; aspect-ratio: 16 / 9; margin-top: 40px; border: 0; border-radius: 20px; background: var(--tot-night); }
+    .video-placeholder { display: grid; place-items: center; }
+    .video-placeholder p { margin: 0; font-family: var(--tot-font-brand); font-size: clamp(18px, 2vw, 24px); color: var(--tot-mist); }
+
     /* ---------- Install ---------- */
     .install { margin: 32px 0 0; padding: 0 0 0 1.25em; font-size: 17px; color: var(--tot-muted); }
     .install li + li { margin-top: 8px; }
@@ -324,11 +333,12 @@
         </div>
         <h1>Get taught, not told.</h1>
         <p class="lead">It’s easy to hand your thinking to AI. tot asks one quick question before the answer, so thinking first becomes a habit, one problem at a time.</p>
-        <!-- TODO: once tot is on the Chrome Web Store, point href at the listing,
-             drop the download attribute, and remove the install section below.
-             Until then, rebuild the zip after changing the extension:
-             npm run zip -w extension && cp extension/.output/tot-extension-*-chrome.zip landing/tot-extension.zip -->
-        <a class="cta" href="tot-extension.zip" download>Download tot</a>
+        <!-- tot isn't on the Chrome Web Store yet, so "Get tot" goes to the repo and
+             the install section below explains setup. -->
+        <div class="cta-row">
+          <a class="cta" href="https://github.com/alexanderzhao2007/calhacks" target="_blank" rel="noopener">Get tot on GitHub</a>
+          <a class="cta cta-secondary" href="#video">Watch the demo</a>
+        </div>
         <p class="foot">Free Chrome extension for Claude. No timers, no blocking.</p>
         <a class="scroll-hint" href="#how">See how it works ↓</a>
       </div>
@@ -337,6 +347,21 @@
       <div class="ball" id="ball" aria-hidden="true"><div class="bx"><div class="by"><div class="bsq"><div class="core"></div></div></div></div></div>
       <button class="replay" id="replay" type="button">Replay</button>
     </div>
+
+    <section id="video" aria-labelledby="video-title">
+      <div class="wrap">
+        <p class="eyebrow">Demo</p>
+        <h2 class="title" id="video-title">See tot in action.</h2>
+        <!-- TODO: replace the placeholder div with the demo video, e.g.
+             <video class="video-frame" src="tot-demo.mp4" controls playsinline preload="metadata"></video>
+             or a YouTube embed:
+             <iframe class="video-frame" src="https://www.youtube-nocookie.com/embed/VIDEO_ID"
+                     title="tot demo" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe> -->
+        <div class="video-frame video-placeholder">
+          <p>Demo video coming soon.</p>
+        </div>
+      </div>
+    </section>
 
     <section id="how" aria-labelledby="how-title">
       <div class="wrap">
@@ -397,12 +422,13 @@
         <p class="eyebrow">Install</p>
         <h2 class="title" id="install-title">Set up in a minute.</h2>
         <ol class="install">
-          <li>Download tot and unzip it.</li>
-          <li>Go to <code>chrome://extensions</code> and turn on Developer mode.</li>
-          <li>Click Load unpacked and choose the unzipped folder.</li>
+          <li>Clone the repo from GitHub, then run <code>npm install</code> in it.</li>
+          <li>Copy <code>.env.example</code> to <code>.env</code> and add your <code>ANTHROPIC_API_KEY</code>.</li>
+          <li>Run <code>npm start</code>. It starts tot’s question server and builds the extension.</li>
+          <li>Go to <code>chrome://extensions</code>, turn on Developer mode, click Load unpacked, and choose <code>extension/.output/chrome-mv3-dev</code>.</li>
           <li>Open <code>claude.ai</code> and ask away.</li>
         </ol>
-        <a class="cta install-cta" href="tot-extension.zip" download>Download tot</a>
+        <a class="cta install-cta" href="https://github.com/alexanderzhao2007/calhacks" target="_blank" rel="noopener">Get tot on GitHub</a>
       </div>
     </section>
   </main>
