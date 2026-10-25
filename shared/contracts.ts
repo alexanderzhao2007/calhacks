@@ -73,6 +73,8 @@ export const SidebarResultSchema = z.discriminatedUnion('action', [
     answer: z.string().min(1),
   }),
   z.object({ action: z.literal('skip'), turnId: z.string().min(1) }),
+  // Closes the "thanks" screen (button or auto-close timer).
+  z.object({ action: z.literal('close'), turnId: z.string().min(1) }),
 ]);
 export type SidebarResult = z.infer<typeof SidebarResultSchema>;
 
@@ -106,3 +108,31 @@ export const FollowUpResponseSchema = z
     { message: 'question must be nonempty for follow_up and null otherwise' },
   );
 export type FollowUpResponse = z.infer<typeof FollowUpResponseSchema>;
+
+// ---- Follow-up message composing (api/prompts/compose.system.md) ------------
+
+export const ComposeRequestSchema = z.object({
+  requestId: z.string().min(1),
+  mode: z.enum(['solve', 'brainstorm']),
+  prompt: z.string(), // the original student message
+  conversationContext: z.array(ContextTurnSchema).optional(),
+  attachments: z.array(AttachmentMetaSchema),
+  qaHistory: z.array(QAPairSchema).min(1),
+});
+export type ComposeRequest = z.infer<typeof ComposeRequestSchema>;
+
+// 'fallback' means the model gave no usable result; the extension uses its
+// deterministic template instead.
+export const ComposeResponseSchema = z
+  .object({
+    requestId: z.string().min(1),
+    decision: z.enum(['paste', 'skip', 'fallback']),
+    reason: z.string(),
+    message: z.string().nullable(), // nonempty only if paste
+  })
+  .refine(
+    (r) =>
+      r.decision === 'paste' ? typeof r.message === 'string' && r.message.trim().length > 0 : r.message === null,
+    { message: 'message must be nonempty for paste and null otherwise' },
+  );
+export type ComposeResponse = z.infer<typeof ComposeResponseSchema>;

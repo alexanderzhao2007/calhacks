@@ -2,23 +2,30 @@
 // history, and the skip confirm. Takes a SidebarRequest and emits a
 // SidebarResult; knows nothing about Claude's DOM. Styles live in tot.css.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { SidebarRequest, SidebarResult } from '@shared/contracts';
 import { COPY } from './copy';
+
+/** composing: /compose is running. pasting / nothing: ready, auto-close counting down. */
+export type ThanksStatus = 'composing' | 'pasting' | 'nothing';
 
 export type PopupProps = {
   request: SidebarRequest | null;
   judging: boolean;
+  thanks: ThanksStatus | null;
   onResult: (result: SidebarResult) => void;
 };
 
-export function TotPopup({ request, judging, onResult }: PopupProps) {
+const THANKS_CLOSE_S = 4;
+
+export function TotPopup({ request, judging, thanks, onResult }: PopupProps) {
   if (!request) return null;
+  if (thanks) return <Thanks status={thanks} onClose={() => onResult({ action: 'close', turnId: request.turnId })} />;
   // Keyed by question so a follow-up starts with an empty field.
   return <Popup key={`${request.turnId}:${request.question}`} request={request} judging={judging} onResult={onResult} />;
 }
 
-function Popup({ request, judging, onResult }: PopupProps & { request: SidebarRequest }) {
+function Popup({ request, judging, onResult }: Omit<PopupProps, 'thanks'> & { request: SidebarRequest }) {
   const [draft, setDraft] = useState('');
   const [confirming, setConfirming] = useState(false);
 
@@ -65,12 +72,22 @@ function Popup({ request, judging, onResult }: PopupProps & { request: SidebarRe
 
   return (
     <div className="tot-backdrop">
-      <div className="tot-popup" role="dialog" aria-modal="true" aria-labelledby="tot-q" aria-busy={judging}>
+      <div
+        className="tot-popup"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tot-q"
+        aria-describedby="tot-reason"
+        aria-busy={judging}
+      >
         {judging && (
           <svg className="tot-trace" aria-hidden="true">
             <rect x="0" y="0" width="100%" height="100%" rx="16" pathLength={100} />
           </svg>
         )}
+        <p className="tot-reason" id="tot-reason">
+          {COPY.popup.reason}
+        </p>
         {history.length > 0 && !judging ? (
           // column-reverse: DOM order is newest-first so it opens scrolled to the current question.
           <div className="tot-history" tabIndex={0} aria-label={COPY.followUp.historyAriaLabel}>
@@ -108,6 +125,57 @@ function Popup({ request, judging, onResult }: PopupProps & { request: SidebarRe
               {COPY.popup.submit}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Shown after the student's last answer, so tot never just disappears. Closes
+// itself a few seconds after the message for Claude is ready.
+function Thanks({ status, onClose }: { status: ThanksStatus; onClose: () => void }) {
+  const [left, setLeft] = useState(THANKS_CLOSE_S);
+  const counting = status !== 'composing';
+
+  useEffect(() => {
+    if (!counting) return;
+    if (left <= 0) {
+      onClose();
+      return;
+    }
+    const t = setTimeout(() => setLeft((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [counting, left, onClose]);
+
+  return (
+    <div className="tot-backdrop">
+      <div
+        className="tot-popup tot-thanks"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tot-thanks-title"
+        aria-describedby="tot-thanks-body"
+        aria-busy={!counting}
+      >
+        {!counting && (
+          <svg className="tot-trace" aria-hidden="true">
+            <rect x="0" y="0" width="100%" height="100%" rx="16" pathLength={100} />
+          </svg>
+        )}
+        <div className="tot-question-row">
+          <TotIcon />
+          <h2 className="tot-question" id="tot-thanks-title">
+            {COPY.thanks.title}
+          </h2>
+        </div>
+        <p className="tot-thanks-body" id="tot-thanks-body" aria-live="polite">
+          {COPY.thanks[status]}
+        </p>
+        <div className="tot-actions">
+          <span className="tot-hint">{counting ? COPY.thanks.closingIn(Math.max(left, 0)) : ''}</span>
+          <button type="button" className="tot-btn tot-btn-primary" autoFocus onClick={onClose}>
+            {COPY.thanks.close}
+          </button>
         </div>
       </div>
     </div>

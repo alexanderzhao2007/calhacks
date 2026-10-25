@@ -4,7 +4,7 @@
 
 import ReactDOM from 'react-dom/client';
 import '../ui/tot.css';
-import type { ClassifyRequest, FollowUpRequest, QAPair, SidebarRequest, SidebarResult } from '@shared/contracts';
+import type { ClassifyRequest, ComposeRequest, FollowUpRequest, SidebarRequest, SidebarResult } from '@shared/contracts';
 import {
   answerTextLength,
   getAssistantMessages,
@@ -28,13 +28,13 @@ import {
   setPending,
   uninstallCoverStyle,
 } from '../core/responseCover';
-import { formatFollowUp } from '../core/followUpText';
 import { installPageStyle, setModal, uninstallPageStyle } from '../core/pageEffects';
 import { TurnCoordinator, chatIdFromPath, type Effect } from '../core/turnCoordinator';
-import { TotPopup } from '../ui/TotPopup';
+import { TotPopup, type ThanksStatus } from '../ui/TotPopup';
 
 const DEADLINE_MS = 10000;
 const FOLLOW_UP_DEADLINE_MS = 4000; // judging an answer; failure hands off
+const COMPOSE_DEADLINE_MS = 5000; // writing the message for Claude; failure uses the template
 const USER_CHECKED_ATTR = 'data-tot-checked';
 const UI_NAME = 'tot-panel'; // also the shadow host's tag, kept unblurred
 
@@ -59,7 +59,11 @@ export default defineContentScript({
     const sendTime = new Map<string, number>();
 
     // ---- UI ----------------------------------------------------------------
-    let panel: { request: SidebarRequest | null; judging: boolean } = { request: null, judging: false };
+    let panel: { request: SidebarRequest | null; judging: boolean; thanks: ThanksStatus | null } = {
+      request: null,
+      judging: false,
+      thanks: null,
+    };
     const heldTurnIds = new Set<string>(); // turns whose original answer is held behind the popup
     const ui = await createShadowRootUi(ctx, {
       name: UI_NAME,
@@ -116,15 +120,24 @@ export default defineContentScript({
           case 'closeSidebar':
             if (panel.request?.turnId === fx.turnId) {
               unlockComposerFocus();
-              setPanel({ request: null, judging: false });
+              setPanel({ request: null, judging: false, thanks: null });
             }
             break;
           case 'judgeAnswer':
             setPanel({ judging: true });
             void judgeAnswer(fx.turnId, fx.request);
             break;
+          case 'showThanks':
+            setPanel({ judging: false, thanks: 'composing' });
+            break;
+          case 'composeFollowUp':
+            void composeFollowUp(fx.turnId, fx.request);
+            break;
+          case 'thanksReady':
+            if (panel.request?.turnId === fx.turnId) setPanel({ thanks: fx.willPaste ? 'pasting' : 'nothing' });
+            break;
           case 'submitFollowUp':
-            void submitFollowUp(fx.turnId, fx.qaHistory);
+            void submitFollowUp(fx.turnId, fx.text);
             break;
           case 'revealAll':
             revealEverything(fx.reason);
@@ -169,14 +182,14 @@ export default defineContentScript({
       for (const el of getAssistantMessages()) markSeen(el);
       setPending(false);
       heldTurnIds.clear();
-      setPanel({ request: null, judging: false });
+      setPanel({ request: null, judging: false, thanks: null });
       log('revealAll', reason);
     }
 
     function openSidebar(request: SidebarRequest) {
       if (heldTurnIds.has(request.turnId)) {
         // A follow-up question for a turn whose answer is already held.
-        setPanel({ request, judging: false });
+        setPanel({ request, judging: false, thanks: null });
         log('follow-up question', { turnId: request.turnId });
         return;
       }
@@ -191,7 +204,7 @@ export default defineContentScript({
       }
       hold(key);
       heldTurnIds.add(request.turnId);
-      setPanel({ request, judging: false });
+      setPanel({ request, judging: false, thanks: null });
       log('intervene', { turnId: request.turnId, msSinceSend: Math.round(performance.now() - (sendTime.get(request.turnId) ?? 0)) });
     }
 
@@ -256,21 +269,31 @@ export default defineContentScript({
       apply(coord.onClassifyResult(turnId, result, performance.now()));
     }
 
+    type ApiResult = { ok: true; res: unknown } | { ok: false; error: string };
+
+    /** Ask the background worker to call the API; always settles within the deadline. */
+    async function callApi(type: 'tot:followUp' | 'tot:compose', req: unknown, deadlineMs: number): Promise<ApiResult> {
+      const timeout = new Promise<ApiResult>((r) => setTimeout(() => r({ ok: false, error: 'timeout' }), deadlineMs + 500));
+      try {
+        const result = await Promise.race([browser.runtime.sendMessage({ type, req, deadlineMs }), timeout]);
+        return result && typeof result === 'object' ? result : { ok: false, error: 'empty response' };
+      } catch (e) {
+        return { ok: false, error: String(e) };
+      }
+    }
+
     async function judgeAnswer(turnId: string, req: FollowUpRequest) {
       const startedAt = performance.now();
-      const timeout = new Promise<{ ok: false; error: string }>((r) =>
-        setTimeout(() => r({ ok: false, error: 'timeout' }), FOLLOW_UP_DEADLINE_MS + 500),
-      );
-      let result: { ok: true; res: unknown } | { ok: false; error: string };
-      try {
-        const reply = browser.runtime.sendMessage({ type: 'tot:followUp', req, deadlineMs: FOLLOW_UP_DEADLINE_MS });
-        result = await Promise.race([reply, timeout]);
-        if (!result || typeof result !== 'object') result = { ok: false, error: 'empty response' };
-      } catch (e) {
-        result = { ok: false, error: String(e) };
-      }
+      const result = await callApi('tot:followUp', req, FOLLOW_UP_DEADLINE_MS);
       log('judged', { turnId, ok: result.ok, ms: Math.round(performance.now() - startedAt) });
       apply(coord.onFollowUpResult(turnId, result, performance.now()));
+    }
+
+    async function composeFollowUp(turnId: string, req: ComposeRequest) {
+      const startedAt = performance.now();
+      const result = await callApi('tot:compose', req, COMPOSE_DEADLINE_MS);
+      log('composed', { turnId, ok: result.ok, ms: Math.round(performance.now() - startedAt) });
+      apply(coord.onComposeResult(turnId, result));
     }
 
     ctx.addEventListener(
@@ -331,8 +354,7 @@ export default defineContentScript({
     // Pastes the follow-up into Claude's composer, above any draft, silently
     // (HANDOFF.md §3). Never sends it: the student presses Send. Any failure is
     // silent; the answer is already revealed.
-    async function submitFollowUp(turnId: string, qaHistory: QAPair[]) {
-      const text = formatFollowUp(qaHistory);
+    async function submitFollowUp(turnId: string, text: string) {
       unlockComposerFocus(); // we're about to focus and type into it ourselves
       const composer = getComposer();
       if (!text || !composer) {

@@ -19,6 +19,11 @@ const pass = (requestId: string) => ({
   res: { requestId, decision: 'pass', reason: 'r', question: null },
 });
 
+const composed = (requestId: string, message: string | null, decision: 'paste' | 'skip' | 'fallback' = 'paste') => ({
+  ok: true as const,
+  res: { requestId, decision, reason: 'r', message },
+});
+
 function setup(chat = 'abc') {
   const c = new TurnCoordinator(chat);
   c.startTurn({ turnId: 't1', prompt: 'Solve this for me', now: 0 });
@@ -126,12 +131,16 @@ describe('sidebar outcomes', () => {
     const judge = c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'the x^2 part' });
     expect(judge[0]).toMatchObject({ type: 'judgeAnswer', request: { followUpsUsed: 1 } });
     const fx = c.onFollowUpResult('t1', pass('t1'));
-    expect(fx.map((e) => e.type)).toEqual(['closeSidebar', 'reveal', 'submitFollowUp']);
-    expect(fx[2]).toMatchObject({
-      qaHistory: [
-        { question: 'What would you try first?', answer: 'idk' },
-        { question: 'What is one piece?', answer: 'the x^2 part' },
-      ],
+    expect(fx.map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp']);
+    expect(fx[1]).toMatchObject({
+      request: {
+        mode: 'solve',
+        prompt: 'Solve this for me',
+        qaHistory: [
+          { question: 'What would you try first?', answer: 'idk' },
+          { question: 'What is one piece?', answer: 'the x^2 part' },
+        ],
+      },
     });
   });
 
@@ -139,11 +148,7 @@ describe('sidebar outcomes', () => {
     let c = setup();
     c.onClassifyResult('t1', intervene('t1'));
     c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' });
-    expect(c.onFollowUpResult('t1', { ok: false, error: 'timeout' }).map((e) => e.type)).toEqual([
-      'closeSidebar',
-      'reveal',
-      'submitFollowUp',
-    ]);
+    expect(c.onFollowUpResult('t1', { ok: false, error: 'timeout' }).map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp']);
 
     c = setup();
     c.onClassifyResult('t1', intervene('t1'));
@@ -153,20 +158,20 @@ describe('sidebar outcomes', () => {
     }
     expect(c.getTurn('t1')?.followUpsUsed).toBe(2);
     const fx = c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' });
-    expect(fx.map((e) => e.type)).toEqual(['closeSidebar', 'reveal', 'submitFollowUp']); // no judgeAnswer
+    expect(fx.map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp']); // no judgeAnswer
   });
 
   it('asks no new question once 30 s have passed since the popup opened', () => {
     let c = setup();
     c.onClassifyResult('t1', intervene('t1'), 1_000);
     const fx = c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' }, 31_000);
-    expect(fx.map((e) => e.type)).toEqual(['closeSidebar', 'reveal', 'submitFollowUp']);
+    expect(fx.map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp']);
 
     c = setup();
     c.onClassifyResult('t1', intervene('t1'), 1_000);
     c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'idk' }, 29_000);
     const late = c.onFollowUpResult('t1', followUp('t1', 'q2'), 31_500); // judge finished past the window
-    expect(late.map((e) => e.type)).toEqual(['closeSidebar', 'reveal', 'submitFollowUp']);
+    expect(late.map((e) => e.type)).toEqual(['showThanks', 'composeFollowUp']);
   });
 
   it('skip while judging closes, reveals, and ignores the late judgment', () => {
@@ -185,6 +190,8 @@ describe('sidebar outcomes', () => {
     c.onClassifyResult('t1', intervene('t1'));
     c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'base cases' });
     c.onFollowUpResult('t1', pass('t1'));
+    c.onComposeResult('t1', composed('t1', 'My initial approach: base cases'));
+    c.onSidebarResult({ action: 'close', turnId: 't1' });
 
     const text = 'My initial approach:\n  "base cases"';
     expect(c.markFollowUpPending('t1', text)).toBe(true);
@@ -202,10 +209,57 @@ describe('sidebar outcomes', () => {
     c.onClassifyResult('t1', intervene('t1'));
     c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'base cases' });
     c.onFollowUpResult('t1', pass('t1'));
+    c.onComposeResult('t1', composed('t1', 'original follow-up text'));
+    c.onSidebarResult({ action: 'close', turnId: 't1' });
     c.markFollowUpPending('t1', 'original follow-up text');
     expect(c.startTurn({ turnId: 't2', prompt: 'edited follow-up text', now: 1 })).toBeNull();
     expect(c.getTurn('t1')?.phase).toBe('FOLLOWUP_SENT');
     expect(c.startTurn({ turnId: 't3', prompt: 'a new question', now: 2 })).not.toBeNull();
+  });
+});
+
+describe('thanks screen and composed message', () => {
+  function thanks() {
+    const c = setup();
+    c.onClassifyResult('t1', intervene('t1'));
+    c.onSidebarResult({ action: 'answer', turnId: 't1', answer: 'product rule?' });
+    c.onFollowUpResult('t1', pass('t1'));
+    expect(c.getTurn('t1')?.phase).toBe('THANKS');
+    return c;
+  }
+
+  it('composed first, then closed: reveal, then paste the composed message', () => {
+    const c = thanks();
+    expect(c.onComposeResult('t1', composed('t1', 'I think it is the product rule.'))).toEqual([
+      { type: 'thanksReady', turnId: 't1', willPaste: true },
+    ]);
+    expect(c.onSidebarResult({ action: 'close', turnId: 't1' })).toEqual([
+      { type: 'closeSidebar', turnId: 't1' },
+      { type: 'reveal', turnId: 't1', reason: 'continue' },
+      { type: 'submitFollowUp', turnId: 't1', text: 'I think it is the product rule.' },
+    ]);
+    expect(c.getTurn('t1')?.phase).toBe('SUBMIT_FOLLOWUP');
+    expect(c.onSidebarResult({ action: 'close', turnId: 't1' })).toEqual([]); // timer after button
+  });
+
+  it('closed early: reveal now, paste when the message arrives', () => {
+    const c = thanks();
+    expect(c.onSidebarResult({ action: 'close', turnId: 't1' }).map((e) => e.type)).toEqual(['closeSidebar', 'reveal']);
+    expect(c.onComposeResult('t1', composed('t1', 'msg'))).toEqual([{ type: 'submitFollowUp', turnId: 't1', text: 'msg' }]);
+  });
+
+  it('skip pastes nothing; a failed compose falls back to the template', () => {
+    let c = thanks();
+    expect(c.onComposeResult('t1', composed('t1', null, 'skip'))).toEqual([
+      { type: 'thanksReady', turnId: 't1', willPaste: false },
+    ]);
+    expect(c.onSidebarResult({ action: 'close', turnId: 't1' }).map((e) => e.type)).toEqual(['closeSidebar', 'reveal']);
+    expect(c.getTurn('t1')?.phase).toBe('DONE');
+
+    c = thanks();
+    c.onComposeResult('t1', { ok: false, error: 'timeout' });
+    const fx = c.onSidebarResult({ action: 'close', turnId: 't1' });
+    expect(fx[2]).toMatchObject({ type: 'submitFollowUp', text: expect.stringContaining('My initial approach is: product rule?') });
   });
 });
 

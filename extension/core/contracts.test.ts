@@ -17,6 +17,7 @@ describe('SidebarResultSchema', () => {
     expect(SidebarResultSchema.safeParse({ action: 'skip', turnId: 't' }).success).toBe(true);
     expect(SidebarResultSchema.safeParse({ action: 'answer', turnId: 't', answer: 'idea' }).success).toBe(true);
     expect(SidebarResultSchema.safeParse({ action: 'answer', turnId: 't' }).success).toBe(false);
+    expect(SidebarResultSchema.safeParse({ action: 'close', turnId: 't' }).success).toBe(true);
   });
 });
 

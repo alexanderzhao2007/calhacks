@@ -9,7 +9,8 @@
     "eval": "tsx scripts/evalClassifier.ts",
     "compile": "tsc --noEmit",
     "test": "vitest run",
-    "eval:follow-up": "tsx scripts/evalFollowUp.ts"
+    "eval:follow-up": "tsx scripts/evalFollowUp.ts",
+    "eval:compose": "tsx scripts/evalCompose.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",

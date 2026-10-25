@@ -4,19 +4,23 @@
 
 import {
   ClassifyResponseSchema,
+  ComposeResponseSchema,
   FollowUpResponseSchema,
   MAX_FOLLOW_UPS,
   type AttachmentMeta,
+  type ComposeRequest,
   type FollowUpRequest,
   type QAPair,
   type SidebarRequest,
   type SidebarResult,
 } from '@shared/contracts';
+import { formatFollowUp } from './followUpText';
 
 export type TurnPhase =
   | 'CLASSIFYING'
   | 'INTERVENING' // a question is shown, waiting for the student's answer
   | 'JUDGING' // /follow-up is deciding whether the answer holds thinking
+  | 'THANKS' // thanks screen shown; /compose writes the message for Claude
   | 'SUBMIT_FOLLOWUP'
   | 'FOLLOWUP_SENT'
   | 'DONE';
@@ -34,6 +38,8 @@ export type Turn = {
   qaHistory: QAPair[]; // every tot question and the student's answer, in order
   followUpsUsed: number;
   openedAt: number; // when the popup first opened
+  thanksClosed: boolean;
+  composedText?: string | null; // undefined while /compose runs; null = paste nothing
 };
 
 export type Effect =
@@ -42,7 +48,10 @@ export type Effect =
   | { type: 'openSidebar'; request: SidebarRequest }
   | { type: 'closeSidebar'; turnId: string }
   | { type: 'judgeAnswer'; turnId: string; request: FollowUpRequest }
-  | { type: 'submitFollowUp'; turnId: string; qaHistory: QAPair[] }
+  | { type: 'showThanks'; turnId: string }
+  | { type: 'composeFollowUp'; turnId: string; request: ComposeRequest }
+  | { type: 'thanksReady'; turnId: string; willPaste: boolean }
+  | { type: 'submitFollowUp'; turnId: string; text: string }
   | { type: 'revealAll'; reason: 'navigation' };
 
 export type RevealReason = 'allow' | 'uncertain' | 'invalid' | 'error' | 'timeout' | 'skip' | 'continue';
@@ -102,6 +111,7 @@ export class TurnCoordinator {
       qaHistory: [],
       followUpsUsed: 0,
       openedAt: input.now,
+      thanksClosed: false,
     };
     this.turns.set(turn.turnId, turn);
     return turn;
@@ -148,6 +158,8 @@ export class TurnCoordinator {
   onSidebarResult(result: SidebarResult, now = 0): Effect[] {
     const turn = this.turns.get(result.turnId);
     if (!turn) return [];
+
+    if (result.action === 'close') return this.onThanksClosed(turn);
 
     // Skip works while a question is shown and while an answer is being judged.
     if (result.action === 'skip') {
@@ -205,6 +217,27 @@ export class TurnCoordinator {
     ];
   }
 
+  /**
+   * Raw /compose output (or failure). A failure falls back to the template so
+   * the student's words are never lost; `skip` means paste nothing.
+   */
+  onComposeResult(
+    turnId: string,
+    result: { ok: true; res: unknown } | { ok: false; error: string },
+  ): Effect[] {
+    const turn = this.turns.get(turnId);
+    if (!turn || turn.phase !== 'THANKS' || turn.composedText !== undefined) return [];
+
+    const parsed = result.ok ? ComposeResponseSchema.safeParse(result.res) : null;
+    const res = parsed?.success && parsed.data.requestId === turnId ? parsed.data : null;
+    if (res?.decision === 'paste') turn.composedText = res.message!;
+    else if (res?.decision === 'skip') turn.composedText = null;
+    else turn.composedText = formatFollowUp(turn.qaHistory) || null;
+
+    if (turn.thanksClosed) return this.placeFollowUp(turn);
+    return [{ type: 'thanksReady', turnId, willPaste: turn.composedText !== null }];
+  }
+
   /** Follow-up cap, or the round window since the popup opened has passed. */
   private outOfRounds(turn: Turn, now: number): boolean {
     return turn.followUpsUsed >= MAX_FOLLOW_UPS || now - turn.openedAt >= FOLLOW_UP_WINDOW_MS;
@@ -237,8 +270,9 @@ export class TurnCoordinator {
   onRevealRequested(turnId: string): Effect[] {
     const turn = this.turns.get(turnId);
     if (!turn || turn.phase === 'DONE') return [];
-    const closing: Effect[] =
-      turn.phase === 'INTERVENING' || turn.phase === 'JUDGING' ? [{ type: 'closeSidebar', turnId }] : [];
+    const popupOpen =
+      turn.phase === 'INTERVENING' || turn.phase === 'JUDGING' || (turn.phase === 'THANKS' && !turn.thanksClosed);
+    const closing: Effect[] = popupOpen ? [{ type: 'closeSidebar', turnId }] : [];
     return [...closing, ...this.finish(turn, 'skip')];
   }
 
@@ -285,17 +319,49 @@ export class TurnCoordinator {
   }
 
   /**
-   * The student's thinking is in: close the sidebar, uncover the original answer,
-   * and place the follow-up in the composer. The turn stays in SUBMIT_FOLLOWUP so
-   * the follow-up send is still recognized as tot's own.
+   * The student's thinking is in: show the thanks screen and have /compose
+   * write the message for Claude while it is up.
    */
   private handOff(turn: Turn): Effect[] {
-    turn.phase = 'SUBMIT_FOLLOWUP';
+    turn.phase = 'THANKS';
     return [
+      { type: 'showThanks', turnId: turn.turnId },
+      {
+        type: 'composeFollowUp',
+        turnId: turn.turnId,
+        request: {
+          requestId: turn.turnId,
+          mode: turn.mode,
+          prompt: turn.prompt,
+          attachments: turn.attachments,
+          qaHistory: turn.qaHistory.map((p) => ({ ...p })),
+        },
+      },
+    ];
+  }
+
+  /**
+   * Thanks screen closed (button or timer): close the popup and uncover the
+   * original answer, then paste once the composed message is ready.
+   */
+  private onThanksClosed(turn: Turn): Effect[] {
+    if (turn.phase !== 'THANKS' || turn.thanksClosed) return [];
+    turn.thanksClosed = true;
+    const closing: Effect[] = [
       { type: 'closeSidebar', turnId: turn.turnId },
       { type: 'reveal', turnId: turn.turnId, reason: 'continue' },
-      { type: 'submitFollowUp', turnId: turn.turnId, qaHistory: turn.qaHistory.map((p) => ({ ...p })) },
     ];
+    return turn.composedText === undefined ? closing : [...closing, ...this.placeFollowUp(turn)];
+  }
+
+  /** Both closed and composed. The turn stays in SUBMIT_FOLLOWUP so the send is recognized as tot's own. */
+  private placeFollowUp(turn: Turn): Effect[] {
+    if (!turn.composedText) {
+      turn.phase = 'DONE';
+      return [];
+    }
+    turn.phase = 'SUBMIT_FOLLOWUP';
+    return [{ type: 'submitFollowUp', turnId: turn.turnId, text: turn.composedText }];
   }
 
   private finish(turn: Turn, reason: RevealReason): Effect[] {

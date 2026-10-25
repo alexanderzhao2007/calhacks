@@ -283,6 +283,19 @@
   }
 }
 
+/* Why tot is asking: a small muted line above the question. */
+.tot-reason {
+  margin: 0 0 calc(-1 * var(--tot-popup-gap) + 8px);
+  font-size: var(--tot-size-small);
+  line-height: 1.4;
+  color: var(--tot-text-muted);
+}
+
+/* Thanks screen */
+.tot-thanks-body {
+  margin: 0 0 0 calc(var(--tot-icon-question) + 14px);
+  color: var(--tot-text-muted);
+}
 /* Skip confirm */
 .tot-confirm {
   width: min(400px, 100%);

@@ -3,7 +3,14 @@
 // (api/server.ts); the mock modes stay available for browser-flow testing
 // without API calls (CLAUDE.md §10).
 
-import type { ClassifyRequest, ClassifyResponse, FollowUpRequest, FollowUpResponse } from '@shared/contracts';
+import type {
+  ClassifyRequest,
+  ClassifyResponse,
+  ComposeRequest,
+  ComposeResponse,
+  FollowUpRequest,
+  FollowUpResponse,
+} from '@shared/contracts';
 
 export type MockMode = 'live' | 'fast' | 'slow' | 'error';
 
@@ -18,6 +25,12 @@ export type ClassifyMessage = {
 export type FollowUpMessage = {
   type: 'tot:followUp';
   req: FollowUpRequest;
+  deadlineMs: number;
+};
+
+export type ComposeMessage = {
+  type: 'tot:compose';
+  req: ComposeRequest;
   deadlineMs: number;
 };
 
@@ -48,6 +61,14 @@ function mockFollowUp(req: FollowUpRequest): FollowUpResponse {
   return { requestId: req.requestId, decision: 'pass', reason: 'mock: pass', question: null };
 }
 
+// Mock composer: the extension's template (fallback) unless every answer is empty-ish.
+function mockCompose(req: ComposeRequest): ComposeResponse {
+  const allEmpty = req.qaHistory.every((p) => /^\s*(idk|i don'?t know|no idea|dunno|\?+)?\s*$/i.test(p.answer));
+  return allEmpty
+    ? { requestId: req.requestId, decision: 'skip', reason: 'mock: nothing to paste', message: null }
+    : { requestId: req.requestId, decision: 'fallback', reason: 'mock: use template', message: null };
+}
+
 const MOCK_DELAY_MS: Record<Exclude<MockMode, 'live'>, number> = { fast: 150, slow: 5000, error: 100 };
 
 type ApiResult = { ok: true; res: unknown } | { ok: false; error: string };
@@ -76,8 +97,8 @@ async function mockResult(mode: Exclude<MockMode, 'live'>, make: () => unknown):
 }
 
 export default defineBackground(() => {
-  browser.runtime.onMessage.addListener((msg: ClassifyMessage | FollowUpMessage, _sender, sendResponse) => {
-    if (msg?.type !== 'tot:classify' && msg?.type !== 'tot:followUp') return;
+  browser.runtime.onMessage.addListener((msg: ClassifyMessage | FollowUpMessage | ComposeMessage, _sender, sendResponse) => {
+    if (msg?.type !== 'tot:classify' && msg?.type !== 'tot:followUp' && msg?.type !== 'tot:compose') return;
     void (async () => {
       const { mockMode = 'live' } = (await browser.storage.local.get('mockMode')) as {
         mockMode?: MockMode;
@@ -88,11 +109,17 @@ export default defineBackground(() => {
             ? await postJson('/classify', msg.req, msg.deadlineMs)
             : await mockResult(mockMode, () => mockClassify(msg.req)),
         );
-      } else {
+      } else if (msg.type === 'tot:followUp') {
         sendResponse(
           mockMode === 'live'
             ? await postJson('/follow-up', msg.req, msg.deadlineMs)
             : await mockResult(mockMode, () => mockFollowUp(msg.req)),
+        );
+      } else {
+        sendResponse(
+          mockMode === 'live'
+            ? await postJson('/compose', msg.req, msg.deadlineMs)
+            : await mockResult(mockMode, () => mockCompose(msg.req)),
         );
       }
     })();

@@ -1,13 +1,14 @@
 // Minimal HTTP wrapper: POST /classify (prompt 1), POST /follow-up (prompt 2),
-// GET /health.
+// POST /compose (prompt 3), GET /health.
 // Plain node:http so it runs locally and ports to any serverless host.
 // Logs metadata only, never prompt text (CLAUDE.md §9).
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
-import { ClassifyRequestSchema, FollowUpRequestSchema } from '../shared/contracts.ts';
+import { ClassifyRequestSchema, ComposeRequestSchema, FollowUpRequestSchema } from '../shared/contracts.ts';
 import { classify, DEFAULT_MODEL, DEFAULT_TIMEOUT_MS, loadSystemPrompt } from './classifier.ts';
+import { composeFollowUp, DEFAULT_COMPOSE_TIMEOUT_MS, loadComposePrompt } from './compose.ts';
 import { DEFAULT_FOLLOW_UP_TIMEOUT_MS, judgeAnswer, loadFollowUpPrompt } from './followUp.ts';
 
 try {
@@ -20,6 +21,7 @@ const PORT = Number(process.env.PORT) || 8787;
 const MODEL = process.env.TOT_MODEL || DEFAULT_MODEL;
 const TIMEOUT_MS = Number(process.env.TOT_CLASSIFY_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
 const FOLLOW_UP_TIMEOUT_MS = Number(process.env.TOT_FOLLOW_UP_TIMEOUT_MS) || DEFAULT_FOLLOW_UP_TIMEOUT_MS;
+const COMPOSE_TIMEOUT_MS = Number(process.env.TOT_COMPOSE_TIMEOUT_MS) || DEFAULT_COMPOSE_TIMEOUT_MS;
 const ALLOWED_ORIGINS = (process.env.TOT_ALLOWED_ORIGINS ?? '')
   .split(',')
   .map((o) => o.trim())
@@ -33,6 +35,7 @@ if (!process.env.ANTHROPIC_API_KEY) {
 const client = new Anthropic();
 const systemPrompt = loadSystemPrompt();
 const followUpPrompt = loadFollowUpPrompt();
+const composePrompt = loadComposePrompt();
 
 function send(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -106,9 +109,33 @@ async function handleFollowUp(body: unknown, res: ServerResponse) {
   send(res, 200, result);
 }
 
+async function handleCompose(body: unknown, res: ServerResponse) {
+  const parsed = ComposeRequestSchema.safeParse(body);
+  if (!parsed.success) return send(res, 400, { error: 'invalid ComposeRequest' });
+  const { res: result, latencyMs, cacheReadTokens } = await composeFollowUp(parsed.data, {
+    client,
+    systemPrompt: composePrompt,
+    model: MODEL,
+    timeoutMs: COMPOSE_TIMEOUT_MS,
+  });
+  console.log(
+    JSON.stringify({
+      route: 'compose',
+      requestId: result.requestId,
+      decision: result.decision,
+      reason: result.reason,
+      rounds: parsed.data.qaHistory.length,
+      latencyMs,
+      cacheReadTokens,
+    }),
+  );
+  send(res, 200, result);
+}
+
 const routes: Record<string, (body: unknown, res: ServerResponse) => Promise<void>> = {
   '/classify': handleClassify,
   '/follow-up': handleFollowUp,
+  '/compose': handleCompose,
 };
 
 const server = createServer(async (req, res) => {
