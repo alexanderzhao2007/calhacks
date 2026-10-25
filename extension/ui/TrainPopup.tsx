@@ -232,10 +232,11 @@ export function TrainPopup() {
   };
 
   let body: React.ReactNode;
-  if (screen === null || (token && !data && !offline)) {
-    body = <Message text={T.connecting} />;
-  } else if (offline && !data && screen !== 'home') {
+  if (offline && !data && screen !== 'home') {
+    // Checked first: with no data the first screen is never picked.
     body = <Message text={T.offline} />;
+  } else if (screen === null || (token && !data)) {
+    body = <Message text={T.connecting} />;
   } else if (screen === 'home') {
     body = (
       <Home

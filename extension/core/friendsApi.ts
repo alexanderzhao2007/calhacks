@@ -76,6 +76,20 @@ async function query(token: string, view: string): Promise<Record<string, unknow
   return result.rows.map((row) => Object.fromEntries(row.map((v, i) => [names[i], v])));
 }
 
+/**
+ * For views added after the first Maincloud publish (my_look, my_solo,
+ * group_looks): a server still on the older module answers 400 "no such
+ * table", which reads as "nothing saved yet" instead of breaking the popup.
+ */
+async function queryOptional(token: string, view: string): Promise<Record<string, unknown>[]> {
+  try {
+    return await query(token, view);
+  } catch (e) {
+    if (e instanceof Error && e.message === `sql ${view} 400`) return [];
+    throw e;
+  }
+}
+
 // Identities arrive as a one-field product: ["0x…"].
 const identityHex = (v: unknown): string => (Array.isArray(v) ? String(v[0]) : String(v));
 
@@ -90,11 +104,11 @@ const toLook = (r: Record<string, unknown>): Look => ({
 export async function loadBoard(token: string): Promise<Board> {
   const [profile, look, solo, group, members, looks, groupDays, mine] = await Promise.all([
     query(token, 'my_profile'),
-    query(token, 'my_look'),
-    query(token, 'my_solo'),
+    queryOptional(token, 'my_look'),
+    queryOptional(token, 'my_solo'),
     query(token, 'my_group'),
     query(token, 'group_members'),
-    query(token, 'group_looks'),
+    queryOptional(token, 'group_looks'),
     query(token, 'group_counts'),
     query(token, 'my_counts'),
   ]);
