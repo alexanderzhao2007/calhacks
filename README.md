@@ -4,6 +4,7 @@
 
 It's easy to hand your thinking to AI. When you ask Claude to do a learning task for you without showing an attempt, tot asks one quick question about how you'd start. Your answer goes into the chat, and Claude coaches your next step instead of handing you the solution.
 
+Youtube Video Walkthrough: https://youtu.be/uZSEl36D6to
 > Hackathon prototype. Works on claude.ai in Chrome only, and isn't on the Chrome Web Store yet, so you run it from this repo.
 
 ## How it works
